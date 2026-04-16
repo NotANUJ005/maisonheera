@@ -96,6 +96,13 @@ const userSchema = new mongoose.Schema(
       default: false,
     },
     addresses: [addressSchema],
+    twoFactorSecret: {
+      type: String,
+    },
+    isTwoFactorEnabled: {
+      type: Boolean,
+      default: false,
+    },
   },
   {
     timestamps: true,

@@ -96,8 +96,8 @@ export const AccountDrawer = ({
     const passwordRegex = /^(?=.*[a-z])(?=.*[A-Z])(?=.*\d)(?=.*[@$!%*?&])[A-Za-z\d@$!%*?&]{8,}$/;
 
     if (purpose === 'register') {
-      if (!formData.name.trim() || !formData.password || !formData.mobileNumber.trim()) {
-        throw new Error('Enter your name, mobile number, and a password.');
+      if (!formData.name.trim() || !formData.password) {
+        throw new Error('Enter your name and a password.');
       }
       if (!passwordRegex.test(formData.password)) {
         throw new Error('Password must be at least 8 chars with uppercase, lowercase, number, and special char.');
@@ -168,8 +168,8 @@ export const AccountDrawer = ({
       }
 
       if (otpContext.purpose === 'register') {
-        if (!formData.otpEmail.trim() || !formData.otpSms.trim()) {
-           throw new Error('Please enter both the Email and Mobile SMS OTPs.');
+        if (!formData.otpEmail.trim()) {
+           throw new Error('Please enter the Email OTP.');
         }
 
         const fetchResult = await fetch('/api/users/register/verify-otp', {
@@ -177,9 +177,7 @@ export const AccountDrawer = ({
            headers: { 'Content-Type': 'application/json' },
            body: JSON.stringify({
              email: otpContext.email,
-             mobileNumber: otpContext.mobileNumber,
-             otpEmail: formData.otpEmail.trim(),
-             otpSms: formData.otpSms.trim()
+             otpEmail: formData.otpEmail.trim()
            })
         });
 
@@ -446,12 +444,11 @@ export const AccountDrawer = ({
                           name="mobileNumber"
                           value={formData.mobileNumber}
                           onChange={handleInputChange}
-                          required
                           placeholder=" "
                           className="w-full bg-transparent border-b border-stone-300 py-2 focus:outline-none focus:border-stone-900 transition-colors peer rounded-none"
                         />
                         <label className="absolute left-0 top-2 text-stone-400 text-sm uppercase tracking-widest pointer-events-none transition-all peer-focus:-top-4 peer-focus:text-[10px] peer-valid:-top-4 peer-valid:text-[10px] peer-focus:text-stone-900">
-                          Mobile Number
+                          Mobile Number (Optional)
                         </label>
                       </div>
                     )}
@@ -551,40 +548,22 @@ export const AccountDrawer = ({
                     )}
 
                     {otpContext && otpContext.purpose === 'register' && (
-                      <>
-                        <div className="relative">
-                          <input
-                            type="text"
-                            name="otpEmail"
-                            value={formData.otpEmail}
-                            onChange={handleInputChange}
-                            required
-                            inputMode="numeric"
-                            maxLength={6}
-                            placeholder=" "
-                            className="w-full bg-transparent border-b border-stone-300 py-2 focus:outline-none focus:border-stone-900 transition-colors peer rounded-none tracking-[0.35em]"
-                          />
-                          <label className="absolute left-0 top-2 text-stone-400 text-sm uppercase tracking-widest pointer-events-none transition-all peer-focus:-top-4 peer-focus:text-[10px] peer-valid:-top-4 peer-valid:text-[10px] peer-focus:text-stone-900">
-                            Email OTP Code
-                          </label>
-                        </div>
-                        <div className="relative mt-2">
-                          <input
-                            type="text"
-                            name="otpSms"
-                            value={formData.otpSms}
-                            onChange={handleInputChange}
-                            required
-                            inputMode="numeric"
-                            maxLength={6}
-                            placeholder=" "
-                            className="w-full bg-transparent border-b border-stone-300 py-2 focus:outline-none focus:border-stone-900 transition-colors peer rounded-none tracking-[0.35em]"
-                          />
-                          <label className="absolute left-0 top-2 text-stone-400 text-sm uppercase tracking-widest pointer-events-none transition-all peer-focus:-top-4 peer-focus:text-[10px] peer-valid:-top-4 peer-valid:text-[10px] peer-focus:text-stone-900">
-                            Mobile SMS OTP Code
-                          </label>
-                        </div>
-                      </>
+                      <div className="relative">
+                        <input
+                          type="text"
+                          name="otpEmail"
+                          value={formData.otpEmail}
+                          onChange={handleInputChange}
+                          required
+                          inputMode="numeric"
+                          maxLength={6}
+                          placeholder=" "
+                          className="w-full bg-transparent border-b border-stone-300 py-2 focus:outline-none focus:border-stone-900 transition-colors peer rounded-none tracking-[0.35em]"
+                        />
+                        <label className="absolute left-0 top-2 text-stone-400 text-sm uppercase tracking-widest pointer-events-none transition-all peer-focus:-top-4 peer-focus:text-[10px] peer-valid:-top-4 peer-valid:text-[10px] peer-focus:text-stone-900">
+                          Email OTP Code
+                        </label>
+                      </div>
                     )}
 
                     {!otpContext && authView === 'login' && (

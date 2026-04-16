@@ -13,6 +13,9 @@ import {
   submitOrderItemFeedback,
   shouldUseLocalFallback,
   updateLocalProfile,
+  setupTwoFactor,
+  verifyTwoFactor,
+  disableTwoFactor,
 } from '../utils/api';
 import { Button } from '../components/ui/Button';
 
@@ -64,6 +67,9 @@ export const AccountDashboard = ({
   const [returnDrafts, setReturnDrafts] = useState({});
   const [feedbackLoadingKey, setFeedbackLoadingKey] = useState('');
   const [returnLoadingKey, setReturnLoadingKey] = useState('');
+  const [qrCodeData, setQrCodeData] = useState(null);
+  const [twoFactorToken, setTwoFactorToken] = useState('');
+  const [twoFactorLoading, setTwoFactorLoading] = useState(false);
 
   useEffect(() => {
     setProfileForm({
@@ -242,6 +248,47 @@ export const AccountDashboard = ({
       setProfileError(error.message);
     } finally {
       setProfileLoading(false);
+    }
+  };
+
+  const handleSetup2FA = async () => {
+    try {
+      setTwoFactorLoading(true);
+      const res = await setupTwoFactor();
+      setQrCodeData(res.qrCodeUrl);
+    } catch (err) {
+      notify({ title: 'Error', message: err.message, tone: 'error' });
+    } finally {
+      setTwoFactorLoading(false);
+    }
+  };
+
+  const handleVerify2FA = async () => {
+    if (!twoFactorToken) return;
+    try {
+      setTwoFactorLoading(true);
+      const user = await verifyTwoFactor(twoFactorToken);
+      setUserInfo(user);
+      setQrCodeData(null);
+      setTwoFactorToken('');
+      notify({ title: 'Success', message: 'Authenticator App enabled.', tone: 'success' });
+    } catch (err) {
+      notify({ title: 'Error', message: err.message, tone: 'error' });
+    } finally {
+      setTwoFactorLoading(false);
+    }
+  };
+
+  const handleDisable2FA = async () => {
+    try {
+      setTwoFactorLoading(true);
+      const user = await disableTwoFactor();
+      setUserInfo(user);
+      notify({ title: 'Disabled', message: 'Authenticator App disabled.', tone: 'info' });
+    } catch (err) {
+      notify({ title: 'Error', message: err.message, tone: 'error' });
+    } finally {
+      setTwoFactorLoading(false);
     }
   };
 
@@ -813,6 +860,16 @@ export const AccountDashboard = ({
                       required
                     />
                   </label>
+                  <label className="block text-sm text-stone-600">
+                    <span className="mb-2 block text-xs uppercase tracking-widest text-stone-500">Mobile Number</span>
+                    <input
+                      type="text"
+                      name="mobileNumber"
+                      value={profileForm.mobileNumber}
+                      onChange={handleProfileChange}
+                      className="w-full rounded-2xl border border-stone-200 bg-stone-50 px-4 py-3 outline-none transition focus:border-stone-900"
+                    />
+                  </label>
                   <label className="block text-sm text-stone-600 relative">
                     <span className="mb-2 block text-xs uppercase tracking-widest text-stone-500">Current Password</span>
                     <input
@@ -861,6 +918,52 @@ export const AccountDashboard = ({
                     {profileLoading ? 'Saving...' : 'Save Account Details'}
                   </Button>
                 </form>
+
+                <div className="mt-12 max-w-xl space-y-6 rounded-[2rem] border border-stone-200 bg-white p-8 shadow-sm">
+                  <h3 className="font-serif text-2xl mb-4">Two-Factor Authentication</h3>
+                  <p className="text-sm text-stone-600 mb-6">
+                    Secure your account with an Authenticator App (like Google Authenticator).
+                  </p>
+                  
+                  {userInfo.isTwoFactorEnabled ? (
+                    <div className="flex flex-col gap-4">
+                      <div className="rounded-2xl border border-emerald-200 bg-emerald-50 px-4 py-3 text-sm text-emerald-700">
+                        Authenticator App is enabled.
+                      </div>
+                      <Button variant="secondary" onClick={handleDisable2FA} disabled={twoFactorLoading}>
+                        {twoFactorLoading ? 'Disabling...' : 'Disable 2FA'}
+                      </Button>
+                    </div>
+                  ) : (
+                    <div className="flex flex-col gap-4">
+                      {!qrCodeData ? (
+                        <Button variant="secondary" onClick={handleSetup2FA} disabled={twoFactorLoading}>
+                          {twoFactorLoading ? 'Loading...' : 'Setup Authenticator App'}
+                        </Button>
+                      ) : (
+                        <div className="flex flex-col gap-4 mt-2 border border-stone-200 p-6 rounded-[2rem] bg-stone-50">
+                          <p className="text-sm text-stone-700">1. Scan this QR code with your Authenticator App.</p>
+                          <img src={qrCodeData} alt="QR Code for 2FA" className="w-48 h-48 mx-auto" />
+                          <p className="text-sm text-stone-700 mt-4">2. Enter the 6-digit code from the app.</p>
+                          <input
+                            type="text"
+                            value={twoFactorToken}
+                            onChange={(e) => setTwoFactorToken(e.target.value)}
+                            placeholder="6-digit code"
+                            className="w-full tracking-[0.35em] text-center rounded-2xl border border-stone-200 bg-white px-4 py-3 outline-none transition focus:border-stone-900"
+                            maxLength={6}
+                          />
+                          <Button onClick={handleVerify2FA} disabled={twoFactorLoading || twoFactorToken.length < 6}>
+                            {twoFactorLoading ? 'Verifying...' : 'Verify and Enable'}
+                          </Button>
+                          <button onClick={() => setQrCodeData(null)} className="text-xs uppercase tracking-widest text-stone-500 hover:text-stone-900 mx-auto mt-2 block">
+                            Cancel
+                          </button>
+                        </div>
+                      )}
+                    </div>
+                  )}
+                </div>
               </motion.div>
             )}
           </AnimatePresence>

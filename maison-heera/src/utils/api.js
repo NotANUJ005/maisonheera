@@ -1413,4 +1413,29 @@ export const googleLoginApi = async ({ credential }) => {
   return saveStoredUser(response.data);
 };
 
+export const setupTwoFactor = async () => {
+  const response = await jsonRequest('/api/users/2fa/setup', {
+    method: 'POST',
+  });
+  if (!response.ok) throw new Error(response.data?.message || 'Failed to setup 2FA');
+  return response.data;
+};
+
+export const verifyTwoFactor = async (token) => {
+  const response = await jsonRequest('/api/users/2fa/verify', {
+    method: 'POST',
+    body: JSON.stringify({ token }),
+  });
+  if (!response.ok) throw new Error(response.data?.message || 'Failed to verify 2FA');
+  return response.data;
+};
+
+export const disableTwoFactor = async () => {
+  const response = await jsonRequest('/api/users/2fa', {
+    method: 'DELETE',
+  });
+  if (!response.ok) throw new Error(response.data?.message || 'Failed to disable 2FA');
+  return response.data;
+};
+
 export { EMPTY_ARRAY };

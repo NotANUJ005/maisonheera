@@ -4,6 +4,8 @@ import jwt from 'jsonwebtoken';
 import { OAuth2Client } from 'google-auth-library';
 import dns from 'dns';
 import { promisify } from 'util';
+import speakeasy from 'speakeasy';
+import QRCode from 'qrcode';
 
 const resolveMx = promisify(dns.resolveMx);
 import AuthOtp from '../models/AuthOtp.js';
@@ -42,6 +44,7 @@ const formatUserResponse = (user) => ({
   addresses: user.addresses || [],
   cart: user.cart || [],
   wishlist: user.wishlist || [],
+  isTwoFactorEnabled: user.isTwoFactorEnabled || false,
   token: generateToken(user._id),
 });
 
@@ -165,10 +168,19 @@ router.post('/login/request-otp', async (req, res) => {
       return res.status(401).json({ message: 'Invalid credentials' });
     }
 
+    if (user.isTwoFactorEnabled) {
+      // For 2FA users, send intent for TOTP
+      return res.json({
+        actualEmail: user.email,
+        requiresTwoFactor: true,
+        message: 'Enter your Authenticator App code.',
+      });
+    }
+
     const otpResponse = await createOtpChallenge({
       email: user.email,
       mobileNumber: user.mobileNumber,
-      otpMethod: 'email', // default login to email currently, could be sms
+      otpMethod: 'email',
       purpose: 'login',
       payload: { userId: String(user._id) },
       recipientName: user.name,
@@ -176,6 +188,7 @@ router.post('/login/request-otp', async (req, res) => {
 
     return res.json({
       actualEmail: user.email,
+      requiresTwoFactor: false,
       ...otpResponse,
     });
   } catch (error) {
@@ -191,15 +204,36 @@ router.post('/login/verify-otp', async (req, res) => {
       return res.status(400).json({ message: 'Email and OTP are required.' });
     }
 
-    const payload = await consumeOtpChallenge({
-      email,
-      purpose: 'login',
-      code: otp.trim(),
-    });
+    const normalizedEmail = email.trim().toLowerCase();
+    const user = await User.findOne({ email: normalizedEmail });
 
-    const user = await User.findById(payload.userId);
     if (!user) {
       return res.status(404).json({ message: 'User not found' });
+    }
+
+    if (user.isTwoFactorEnabled) {
+      // Validate TOTP
+      const verified = speakeasy.totp.verify({
+        secret: user.twoFactorSecret,
+        encoding: 'base32',
+        token: otp.trim(),
+        window: 1, // allow 1 window before/after to account for slight time drift
+      });
+
+      if (!verified) {
+        return res.status(400).json({ message: 'Incorrect Authenticator code. Please try again.' });
+      }
+    } else {
+      // Validate Email OTP
+      const payload = await consumeOtpChallenge({
+        email,
+        purpose: 'login',
+        code: otp.trim(),
+      });
+
+      if (String(payload.userId) !== String(user._id)) {
+        return res.status(400).json({ message: 'Invalid OTP session.' });
+      }
     }
 
     ensureDefaultAddress(user);
@@ -210,13 +244,13 @@ router.post('/login/verify-otp', async (req, res) => {
 });
 
 router.post('/register/request-otp', async (req, res) => {
-  const { name, email, password, mobileNumber, otpMethod = 'sms' } = req.body;
+  const { name, email, password, mobileNumber } = req.body;
 
   try {
     const normalizedEmail = email?.trim().toLowerCase();
-    const mobile = mobileNumber?.trim();
-    if (!name?.trim() || !normalizedEmail || !password || !mobile) {
-      return res.status(400).json({ message: 'Name, email, mobile number, and password are required.' });
+    const mobile = mobileNumber?.trim(); // optional
+    if (!name?.trim() || !normalizedEmail || !password) {
+      return res.status(400).json({ message: 'Name, email, and password are required.' });
     }
     
     // Validate basic email format
@@ -247,19 +281,6 @@ router.post('/register/request-otp', async (req, res) => {
       return res.status(400).json({ message: 'User already exists' });
     }
 
-    await createOtpChallenge({
-      email: mobile,
-      mobileNumber: mobile,
-      otpMethod: 'sms',
-      purpose: 'register_sms',
-      payload: {
-        name: name.trim(),
-        password,
-        mobileNumber: mobile,
-      },
-      recipientName: name.trim(),
-    });
-
     const emailResponse = await createOtpChallenge({
       email: normalizedEmail,
       mobileNumber: mobile,
@@ -268,13 +289,13 @@ router.post('/register/request-otp', async (req, res) => {
       payload: {
         name: name.trim(),
         password,
-        mobileNumber: mobile,
+        mobileNumber: mobile || '',
       },
       recipientName: name.trim(),
     });
 
     return res.json({
-      message: 'Verification codes sent. Please check your email and mobile messages.',
+      message: 'Verification code sent. Please check your email.',
       developmentOtp: isOtpDevelopmentMode() ? 'Check server console' : undefined,
     });
   } catch (error) {
@@ -283,25 +304,18 @@ router.post('/register/request-otp', async (req, res) => {
 });
 
 router.post('/register/verify-otp', async (req, res) => {
-  const { email, mobileNumber, otpEmail, otpSms } = req.body;
+  const { email, otpEmail } = req.body;
 
   try {
     const normalizedEmail = email?.trim().toLowerCase();
-    const mobile = mobileNumber?.trim();
-    if (!normalizedEmail || !mobile || !otpEmail?.trim() || !otpSms?.trim()) {
-      return res.status(400).json({ message: 'Email, mobile number, and both OTPs are required.' });
+    if (!normalizedEmail || !otpEmail?.trim()) {
+      return res.status(400).json({ message: 'Email and OTP are required.' });
     }
 
     const payload = await consumeOtpChallenge({
       email: normalizedEmail,
       purpose: 'register_email',
       code: otpEmail.trim(),
-    });
-
-    await consumeOtpChallenge({
-      email: mobile,
-      purpose: 'register_sms',
-      code: otpSms.trim(),
     });
 
     const userExists = await User.findOne({ email: normalizedEmail });
@@ -312,7 +326,7 @@ router.post('/register/verify-otp', async (req, res) => {
     const user = await User.create({
       name: payload.name,
       email: normalizedEmail,
-      mobileNumber: payload.mobileNumber,
+      mobileNumber: payload.mobileNumber || undefined,
       password: payload.password,
       addresses: [],
     });
@@ -661,6 +675,71 @@ router.put('/profile', protect, async (req, res) => {
     return res.json(formatUserResponse(user));
   } catch (error) {
     return res.status(500).json({ message: error.message });
+  }
+});
+
+router.post('/2fa/setup', protect, async (req, res) => {
+  try {
+    const user = await User.findById(req.userId);
+    if (!user) return res.status(404).json({ message: 'User not found' });
+
+    const secret = speakeasy.generateSecret({
+      name: `Maison Heera (${user.email})`
+    });
+
+    user.twoFactorSecret = secret.base32;
+    await user.save();
+
+    QRCode.toDataURL(secret.otpauth_url, (err, data_url) => {
+      if (err) return res.status(500).json({ message: 'Error generating QR code' });
+      res.json({ secret: secret.base32, qrCodeUrl: data_url });
+    });
+  } catch (error) {
+    res.status(500).json({ message: error.message });
+  }
+});
+
+router.post('/2fa/verify', protect, async (req, res) => {
+  try {
+    const { token } = req.body;
+    const user = await User.findById(req.userId);
+    if (!user) return res.status(404).json({ message: 'User not found' });
+
+    if (!user.twoFactorSecret) {
+      return res.status(400).json({ message: '2FA not set up' });
+    }
+
+    const verified = speakeasy.totp.verify({
+      secret: user.twoFactorSecret,
+      encoding: 'base32',
+      token,
+      window: 1
+    });
+
+    if (verified) {
+      user.isTwoFactorEnabled = true;
+      await user.save();
+      return res.json(formatUserResponse(user));
+    } else {
+      return res.status(400).json({ message: 'Invalid authenticator code.' });
+    }
+  } catch (error) {
+    res.status(500).json({ message: error.message });
+  }
+});
+
+router.delete('/2fa', protect, async (req, res) => {
+  try {
+    const user = await User.findById(req.userId);
+    if (!user) return res.status(404).json({ message: 'User not found' });
+
+    user.isTwoFactorEnabled = false;
+    user.twoFactorSecret = undefined;
+    await user.save();
+    
+    return res.json(formatUserResponse(user));
+  } catch (error) {
+    res.status(500).json({ message: error.message });
   }
 });
 
