@@ -7,6 +7,7 @@ const navItems = [
   { label: 'Collections', view: 'shop' },
   { label: 'About Us', view: 'about' },
   { label: 'Contact', view: 'contact' },
+  { label: 'Orders & Returns', view: 'track-order' },
 ];
 
 export const Navbar = ({

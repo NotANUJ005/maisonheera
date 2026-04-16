@@ -77,3 +77,45 @@ export const sendOtpEmail = async ({ email, name, purpose, code }) => {
 
   return { delivered: true };
 };
+
+export const sendOtpSms = async ({ mobileNumber, name, purpose, code }) => {
+  const { TWILIO_ACCOUNT_SID, TWILIO_AUTH_TOKEN, TWILIO_PHONE_NUMBER, TWILIO_MESSAGING_SERVICE_SID } = process.env;
+
+  if (TWILIO_ACCOUNT_SID && TWILIO_AUTH_TOKEN && (TWILIO_PHONE_NUMBER || TWILIO_MESSAGING_SERVICE_SID)) {
+     const url = `https://api.twilio.com/2010-04-01/Accounts/${TWILIO_ACCOUNT_SID}/Messages.json`;
+     const auth = Buffer.from(`${TWILIO_ACCOUNT_SID}:${TWILIO_AUTH_TOKEN}`).toString('base64');
+     const params = new URLSearchParams();
+     params.append('To', mobileNumber);
+     
+     if (TWILIO_MESSAGING_SERVICE_SID) {
+       params.append('MessagingServiceSid', TWILIO_MESSAGING_SERVICE_SID);
+     } else {
+       params.append('From', TWILIO_PHONE_NUMBER);
+     }
+     
+     params.append('Body', `[Maison Heera] Your OTP for ${purpose === 'register_sms' ? 'registration' : 'verification'} is: ${code}`);
+
+     try {
+       const res = await fetch(url, {
+         method: 'POST',
+         headers: {
+           'Authorization': `Basic ${auth}`,
+           'Content-Type': 'application/x-www-form-urlencoded'
+         },
+         body: params.toString()
+       });
+       
+       if (!res.ok) {
+         console.error(`Twilio SMS Failed: ${await res.text()}`);
+       }
+       return { delivered: res.ok };
+     } catch (err) {
+       console.error(`Twilio SMS Request Failed: ${err.message}`);
+       return { delivered: false };
+     }
+  }
+
+  // Fallback if no Twilio details
+  console.log(`[SMS MOCK] Sending OTP ${code} for ${purpose} to ${mobileNumber}`);
+  return { delivered: true }; // we just mock delivery
+};

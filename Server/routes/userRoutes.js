@@ -2,6 +2,10 @@ import crypto from 'crypto';
 import express from 'express';
 import jwt from 'jsonwebtoken';
 import { OAuth2Client } from 'google-auth-library';
+import dns from 'dns';
+import { promisify } from 'util';
+
+const resolveMx = promisify(dns.resolveMx);
 import AuthOtp from '../models/AuthOtp.js';
 import User from '../models/User.js';
 import { protect } from '../middleware/authMiddleware.js';
@@ -15,6 +19,7 @@ import {
   hashOtpCode,
   isOtpDevelopmentMode,
   sendOtpEmail,
+  sendOtpSms,
 } from '../utils/authOtp.js';
 
 const OTP_EXPIRY_MS = 1000 * 60 * 10;
@@ -56,7 +61,7 @@ const clearOtpPurpose = async (email, purpose) => {
   });
 };
 
-const createOtpChallenge = async ({ email, purpose, payload = {}, recipientName }) => {
+const createOtpChallenge = async ({ email, mobileNumber, otpMethod = 'email', purpose, payload = {}, recipientName }) => {
   const normalizedEmail = email.trim().toLowerCase();
   const code = generateOtpCode();
   const codeHash = hashOtpCode(code);
@@ -72,25 +77,45 @@ const createOtpChallenge = async ({ email, purpose, payload = {}, recipientName 
     expiresAt,
   });
 
-  let mailResult = { delivered: false };
+  let deliveryResult = { delivered: false };
   try {
-    mailResult = await sendOtpEmail({
-      email: normalizedEmail,
-      name: recipientName,
-      purpose,
-      code,
-    });
+    if (otpMethod === 'sms' && mobileNumber) {
+      deliveryResult = await sendOtpSms({
+        mobileNumber,
+        name: recipientName,
+        purpose,
+        code,
+      });
+    } else {
+      deliveryResult = await sendOtpEmail({
+        email: normalizedEmail,
+        name: recipientName,
+        purpose,
+        code,
+      });
+    }
   } catch (error) {
-    console.error(`OTP delivery failed for ${purpose}:`, error.message);
+    console.error(`OTP delivery failed for ${purpose} via ${otpMethod}:`, error.message);
   }
 
   return {
-    message: 'OTP sent successfully.',
+    message: otpMethod === 'sms' ? 'OTP sent to your mobile number.' : 'OTP sent to your email address.',
     ...(isOtpDevelopmentMode() ? { developmentOtp: code } : {}),
   };
 };
 
 const isStrongPassword = (password) => STRONG_PASSWORD_REGEX.test(String(password || ''));
+
+const isEmailDomainValid = async (email) => {
+  const domain = email.split('@')[1];
+  if (!domain) return false;
+  try {
+    const addresses = await resolveMx(domain);
+    return addresses && addresses.length > 0;
+  } catch (error) {
+    return false;
+  }
+};
 
 const consumeOtpChallenge = async ({ email, purpose, code }) => {
   const normalizedEmail = email.trim().toLowerCase();
@@ -123,29 +148,34 @@ const consumeOtpChallenge = async ({ email, purpose, code }) => {
 };
 
 router.post('/login/request-otp', async (req, res) => {
-  const { email, password } = req.body;
+  const { email, password } = req.body; // 'email' can be email or mobile
 
   try {
-    const normalizedEmail = email?.trim().toLowerCase();
-    if (!normalizedEmail || !password) {
-      return res.status(400).json({ message: 'Email and password are required.' });
+    const identifier = email?.trim();
+    const normalizedEmail = identifier?.toLowerCase();
+    if (!identifier || !password) {
+      return res.status(400).json({ message: 'Email/Mobile and password are required.' });
     }
 
-    const user = await User.findOne({ email: normalizedEmail });
+    const user = await User.findOne({
+      $or: [{ email: normalizedEmail }, { mobileNumber: identifier }]
+    });
 
     if (!user || !(await user.matchPassword(password))) {
-      return res.status(401).json({ message: 'Invalid email or password' });
+      return res.status(401).json({ message: 'Invalid credentials' });
     }
 
     const otpResponse = await createOtpChallenge({
-      email: normalizedEmail,
+      email: user.email,
+      mobileNumber: user.mobileNumber,
+      otpMethod: 'email', // default login to email currently, could be sms
       purpose: 'login',
       payload: { userId: String(user._id) },
       recipientName: user.name,
     });
 
     return res.json({
-      message: 'We have sent a login OTP to your email address.',
+      actualEmail: user.email,
       ...otpResponse,
     });
   } catch (error) {
@@ -180,12 +210,32 @@ router.post('/login/verify-otp', async (req, res) => {
 });
 
 router.post('/register/request-otp', async (req, res) => {
-  const { name, email, password } = req.body;
+  const { name, email, password, mobileNumber, otpMethod = 'sms' } = req.body;
 
   try {
     const normalizedEmail = email?.trim().toLowerCase();
-    if (!name?.trim() || !normalizedEmail || !password) {
-      return res.status(400).json({ message: 'Name, email, and password are required.' });
+    const mobile = mobileNumber?.trim();
+    if (!name?.trim() || !normalizedEmail || !password || !mobile) {
+      return res.status(400).json({ message: 'Name, email, mobile number, and password are required.' });
+    }
+    
+    // Validate basic email format
+    const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
+    if (!emailRegex.test(normalizedEmail)) {
+      return res.status(400).json({ message: 'Invalid email format.' });
+    }
+
+    // Verify if the email domain actually exists and can receive mail (MX records)
+    const isDomainValid = await isEmailDomainValid(normalizedEmail);
+    if (!isDomainValid) {
+      return res.status(400).json({ message: 'The email domain does not exist or cannot receive mail. Please use a real email address.' });
+    }
+    
+    if (mobile) {
+      const mobileExists = await User.findOne({ mobileNumber: mobile });
+      if (mobileExists) {
+        return res.status(400).json({ message: 'Mobile number already in use' });
+      }
     }
     
     if (!isStrongPassword(password)) {
@@ -197,19 +247,35 @@ router.post('/register/request-otp', async (req, res) => {
       return res.status(400).json({ message: 'User already exists' });
     }
 
-    const otpResponse = await createOtpChallenge({
-      email: normalizedEmail,
-      purpose: 'register',
+    await createOtpChallenge({
+      email: mobile,
+      mobileNumber: mobile,
+      otpMethod: 'sms',
+      purpose: 'register_sms',
       payload: {
         name: name.trim(),
         password,
+        mobileNumber: mobile,
+      },
+      recipientName: name.trim(),
+    });
+
+    const emailResponse = await createOtpChallenge({
+      email: normalizedEmail,
+      mobileNumber: mobile,
+      otpMethod: 'email',
+      purpose: 'register_email',
+      payload: {
+        name: name.trim(),
+        password,
+        mobileNumber: mobile,
       },
       recipientName: name.trim(),
     });
 
     return res.json({
-      message: 'We have sent a verification OTP to your email address.',
-      ...otpResponse,
+      message: 'Verification codes sent. Please check your email and mobile messages.',
+      developmentOtp: isOtpDevelopmentMode() ? 'Check server console' : undefined,
     });
   } catch (error) {
     return res.status(500).json({ message: error.message });
@@ -217,18 +283,25 @@ router.post('/register/request-otp', async (req, res) => {
 });
 
 router.post('/register/verify-otp', async (req, res) => {
-  const { email, otp } = req.body;
+  const { email, mobileNumber, otpEmail, otpSms } = req.body;
 
   try {
     const normalizedEmail = email?.trim().toLowerCase();
-    if (!normalizedEmail || !otp?.trim()) {
-      return res.status(400).json({ message: 'Email and OTP are required.' });
+    const mobile = mobileNumber?.trim();
+    if (!normalizedEmail || !mobile || !otpEmail?.trim() || !otpSms?.trim()) {
+      return res.status(400).json({ message: 'Email, mobile number, and both OTPs are required.' });
     }
 
     const payload = await consumeOtpChallenge({
       email: normalizedEmail,
-      purpose: 'register',
-      code: otp.trim(),
+      purpose: 'register_email',
+      code: otpEmail.trim(),
+    });
+
+    await consumeOtpChallenge({
+      email: mobile,
+      purpose: 'register_sms',
+      code: otpSms.trim(),
     });
 
     const userExists = await User.findOne({ email: normalizedEmail });
@@ -239,6 +312,7 @@ router.post('/register/verify-otp', async (req, res) => {
     const user = await User.create({
       name: payload.name,
       email: normalizedEmail,
+      mobileNumber: payload.mobileNumber,
       password: payload.password,
       addresses: [],
     });
@@ -320,15 +394,19 @@ router.post('/login', async (req, res) => {
   const { email, password } = req.body;
 
   try {
-    const normalizedEmail = email?.trim().toLowerCase();
-    const user = await User.findOne({ email: normalizedEmail });
+    const identifier = email?.trim();
+    const normalizedEmail = identifier?.toLowerCase();
+    
+    const user = await User.findOne({
+      $or: [{ email: normalizedEmail }, { mobileNumber: identifier }]
+    });
 
     if (user && (await user.matchPassword(password))) {
       ensureDefaultAddress(user);
       return res.json(formatUserResponse(user));
     }
 
-    return res.status(401).json({ message: 'Invalid email or password' });
+    return res.status(401).json({ message: 'Invalid email/mobile or password' });
   } catch (error) {
     return res.status(500).json({ message: error.message });
   }
@@ -386,14 +464,22 @@ router.post('/google-login', async (req, res) => {
 });
 
 router.post('/register', async (req, res) => {
-  const { name, email, password } = req.body;
+  const { name, email, password, mobileNumber } = req.body;
 
   try {
     const normalizedEmail = email?.trim().toLowerCase();
+    const mobile = mobileNumber?.trim();
     const userExists = await User.findOne({ email: normalizedEmail });
 
     if (userExists) {
       return res.status(400).json({ message: 'User already exists' });
+    }
+
+    if (mobile) {
+      const mobileExists = await User.findOne({ mobileNumber: mobile });
+      if (mobileExists) {
+        return res.status(400).json({ message: 'Mobile number already in use' });
+      }
     }
 
     if (!isStrongPassword(password)) {
@@ -403,6 +489,7 @@ router.post('/register', async (req, res) => {
     const user = await User.create({
       name,
       email: normalizedEmail,
+      mobileNumber: mobile,
       password,
       addresses: [],
     });

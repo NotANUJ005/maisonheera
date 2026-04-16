@@ -846,7 +846,7 @@ export const loadUserOrders = async (user) => {
   }
 };
 
-export const requestAuthOtp = async ({ purpose, name = '', email, password = '' }) => {
+export const requestAuthOtp = async ({ purpose, name = '', email, mobileNumber = '', password = '', otpMethod = 'sms' }) => {
   const normalizedEmail = String(email || '').trim().toLowerCase();
 
   if (purpose === 'login') {
@@ -883,7 +883,9 @@ export const requestAuthOtp = async ({ purpose, name = '', email, password = '' 
       body: JSON.stringify({
         name: String(name || '').trim(),
         email: normalizedEmail,
+        mobileNumber: String(mobileNumber || '').trim(),
         password,
+        otpMethod,
       }),
     });
 

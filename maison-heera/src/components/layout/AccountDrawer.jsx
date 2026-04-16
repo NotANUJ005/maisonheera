@@ -12,8 +12,11 @@ import { GoogleLogin } from '@react-oauth/google';
 const initialFormData = {
   name: '',
   email: '',
+  mobileNumber: '',
   password: '',
   otp: '',
+  otpEmail: '',
+  otpSms: '',
   newPassword: '',
   confirmPassword: '',
 };
@@ -82,7 +85,7 @@ export const AccountDrawer = ({
     resetMessages();
   };
 
-  const requestOtp = async () => {
+  const requestOtp = async (customOtpMethod) => {
     const purpose = authView;
     const normalizedEmail = formData.email.trim().toLowerCase();
 
@@ -93,8 +96,8 @@ export const AccountDrawer = ({
     const passwordRegex = /^(?=.*[a-z])(?=.*[A-Z])(?=.*\d)(?=.*[@$!%*?&])[A-Za-z\d@$!%*?&]{8,}$/;
 
     if (purpose === 'register') {
-      if (!formData.name.trim() || !formData.password) {
-        throw new Error('Enter your name and a password.');
+      if (!formData.name.trim() || !formData.password || !formData.mobileNumber.trim()) {
+        throw new Error('Enter your name, mobile number, and a password.');
       }
       if (!passwordRegex.test(formData.password)) {
         throw new Error('Password must be at least 8 chars with uppercase, lowercase, number, and special char.');
@@ -105,16 +108,20 @@ export const AccountDrawer = ({
       throw new Error('Password is required.');
     }
 
+    const otpMethodToUse = customOtpMethod && typeof customOtpMethod === 'string' ? customOtpMethod : 'email';
     const result = await requestAuthOtp({
       purpose,
       name: formData.name.trim(),
       email: normalizedEmail,
+      mobileNumber: formData.mobileNumber.trim(),
       password: formData.password,
+      otpMethod: otpMethodToUse,
     });
 
     setOtpContext({
       purpose,
-      email: normalizedEmail,
+      email: result.actualEmail || normalizedEmail,
+      mobileNumber: formData.mobileNumber.trim(),
       message: result.message,
       developmentOtp: result.developmentOtp || '',
     });
@@ -122,6 +129,8 @@ export const AccountDrawer = ({
     setFormData((prev) => ({
       ...prev,
       otp: '',
+      otpEmail: '',
+      otpSms: '',
       newPassword: '',
       confirmPassword: '',
     }));
@@ -159,13 +168,27 @@ export const AccountDrawer = ({
       }
 
       if (otpContext.purpose === 'register') {
-        const user = await verifyAuthOtp({
-          purpose: 'register',
-          email: otpContext.email,
-          otp: formData.otp.trim(),
+        if (!formData.otpEmail.trim() || !formData.otpSms.trim()) {
+           throw new Error('Please enter both the Email and Mobile SMS OTPs.');
+        }
+
+        const fetchResult = await fetch('/api/users/register/verify-otp', {
+           method: 'POST',
+           headers: { 'Content-Type': 'application/json' },
+           body: JSON.stringify({
+             email: otpContext.email,
+             mobileNumber: otpContext.mobileNumber,
+             otpEmail: formData.otpEmail.trim(),
+             otpSms: formData.otpSms.trim()
+           })
         });
 
-        handleSuccessfulAuth(user);
+        const userData = await fetchResult.json();
+        if (!fetchResult.ok) {
+           throw new Error(userData?.message || 'Verification failed');
+        }
+
+        handleSuccessfulAuth(userData);
         return;
       }
 
@@ -222,12 +245,12 @@ export const AccountDrawer = ({
     }
   };
 
-  const handleResendOtp = async () => {
+  const handleResendOtp = async (customMethod) => {
     setIsLoading(true);
     resetMessages();
 
     try {
-      await requestOtp();
+      await requestOtp(customMethod);
     } catch (resendError) {
       setError(resendError.message || 'Could not resend OTP.');
     } finally {
@@ -402,7 +425,7 @@ export const AccountDrawer = ({
                     {!otpContext && (
                       <div className="relative">
                         <input
-                          type="email"
+                          type={authView === 'login' ? 'text' : 'email'}
                           name="email"
                           value={formData.email}
                           onChange={handleInputChange}
@@ -411,7 +434,24 @@ export const AccountDrawer = ({
                           className="w-full bg-transparent border-b border-stone-300 py-2 focus:outline-none focus:border-stone-900 transition-colors peer rounded-none"
                         />
                         <label className="absolute left-0 top-2 text-stone-400 text-sm uppercase tracking-widest pointer-events-none transition-all peer-focus:-top-4 peer-focus:text-[10px] peer-valid:-top-4 peer-valid:text-[10px] peer-focus:text-stone-900">
-                          Email Address
+                          {authView === 'login' ? 'Email or Mobile Number' : 'Email Address'}
+                        </label>
+                      </div>
+                    )}
+                    
+                    {!otpContext && authView === 'register' && (
+                      <div className="relative">
+                        <input
+                          type="text"
+                          name="mobileNumber"
+                          value={formData.mobileNumber}
+                          onChange={handleInputChange}
+                          required
+                          placeholder=" "
+                          className="w-full bg-transparent border-b border-stone-300 py-2 focus:outline-none focus:border-stone-900 transition-colors peer rounded-none"
+                        />
+                        <label className="absolute left-0 top-2 text-stone-400 text-sm uppercase tracking-widest pointer-events-none transition-all peer-focus:-top-4 peer-focus:text-[10px] peer-valid:-top-4 peer-valid:text-[10px] peer-focus:text-stone-900">
+                          Mobile Number
                         </label>
                       </div>
                     )}
@@ -441,7 +481,7 @@ export const AccountDrawer = ({
                       </div>
                     )}
 
-                    {otpContext && (
+                    {otpContext && otpContext.purpose !== 'register' && (
                       <>
                         <div className="relative">
                           <input
@@ -510,6 +550,43 @@ export const AccountDrawer = ({
                       </>
                     )}
 
+                    {otpContext && otpContext.purpose === 'register' && (
+                      <>
+                        <div className="relative">
+                          <input
+                            type="text"
+                            name="otpEmail"
+                            value={formData.otpEmail}
+                            onChange={handleInputChange}
+                            required
+                            inputMode="numeric"
+                            maxLength={6}
+                            placeholder=" "
+                            className="w-full bg-transparent border-b border-stone-300 py-2 focus:outline-none focus:border-stone-900 transition-colors peer rounded-none tracking-[0.35em]"
+                          />
+                          <label className="absolute left-0 top-2 text-stone-400 text-sm uppercase tracking-widest pointer-events-none transition-all peer-focus:-top-4 peer-focus:text-[10px] peer-valid:-top-4 peer-valid:text-[10px] peer-focus:text-stone-900">
+                            Email OTP Code
+                          </label>
+                        </div>
+                        <div className="relative mt-2">
+                          <input
+                            type="text"
+                            name="otpSms"
+                            value={formData.otpSms}
+                            onChange={handleInputChange}
+                            required
+                            inputMode="numeric"
+                            maxLength={6}
+                            placeholder=" "
+                            className="w-full bg-transparent border-b border-stone-300 py-2 focus:outline-none focus:border-stone-900 transition-colors peer rounded-none tracking-[0.35em]"
+                          />
+                          <label className="absolute left-0 top-2 text-stone-400 text-sm uppercase tracking-widest pointer-events-none transition-all peer-focus:-top-4 peer-focus:text-[10px] peer-valid:-top-4 peer-valid:text-[10px] peer-focus:text-stone-900">
+                            Mobile SMS OTP Code
+                          </label>
+                        </div>
+                      </>
+                    )}
+
                     {!otpContext && authView === 'login' && (
                       <button
                         type="button"
@@ -554,8 +631,8 @@ export const AccountDrawer = ({
 
                     {otpContext && (
                       <div className="flex flex-col gap-3">
-                        <Button type="button" variant="secondary" onClick={handleResendOtp} disabled={isLoading}>
-                          Resend OTP
+                        <Button type="button" variant="secondary" onClick={() => handleResendOtp()} disabled={isLoading}>
+                          Resend Verification Codes
                         </Button>
                         <button
                           type="button"
@@ -565,6 +642,8 @@ export const AccountDrawer = ({
                             setFormData((prev) => ({
                               ...prev,
                               otp: '',
+                              otpEmail: '',
+                              otpSms: '',
                               newPassword: '',
                               confirmPassword: '',
                             }));
