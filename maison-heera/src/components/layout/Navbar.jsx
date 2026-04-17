@@ -2,14 +2,6 @@ import React, { useEffect, useState } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
 import { Menu, Search, ShoppingBag, User, X } from 'lucide-react';
 
-const navItems = [
-  { label: 'Home', view: 'home' },
-  { label: 'Collections', view: 'shop' },
-  { label: 'About Us', view: 'about' },
-  { label: 'Contact', view: 'contact' },
-  { label: 'Orders & Returns', view: 'track-order' },
-];
-
 export const Navbar = ({
   currentView,
   onNavigate,
@@ -22,6 +14,14 @@ export const Navbar = ({
   isAdmin,
   userInfo,
 }) => {
+  const navItems = [
+    { label: 'Home', view: 'home' },
+    { label: 'Collections', view: 'shop' },
+    { label: 'About Us', view: 'about' },
+    { label: 'Contact', view: 'contact' },
+    { label: 'Orders & Returns', view: userInfo ? 'account' : 'track-order' },
+  ];
+
   const [isScrolled, setIsScrolled] = useState(false);
   const [isSearchExpanded, setIsSearchExpanded] = useState(false);
   const [isMobileMenuOpen, setIsMobileMenuOpen] = useState(false);

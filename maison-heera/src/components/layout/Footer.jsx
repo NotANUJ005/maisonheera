@@ -2,23 +2,23 @@ import React, { useState } from 'react';
 import { Instagram, Facebook, Twitter, ArrowRight } from 'lucide-react';
 import { Button } from '../ui/Button';
 
-const quickLinks = [
-  { label: 'Home', view: 'home' },
-  { label: 'Collections', view: 'shop' },
-  { label: 'Prestige', view: 'prestige-shop' },
-  { label: 'Track Order', view: 'track-order' },
-  { label: 'About', view: 'about' },
-  { label: 'Contact', view: 'contact' },
-];
-
 const socialLinks = [
   { label: 'Instagram', href: 'https://www.instagram.com/', icon: Instagram },
   { label: 'Facebook', href: 'https://www.facebook.com/', icon: Facebook },
   { label: 'Twitter', href: 'https://x.com/', icon: Twitter },
 ];
 
-export const Footer = ({ onNavigate, notify }) => {
+export const Footer = ({ onNavigate, notify, userInfo }) => {
   const [email, setEmail] = useState('');
+
+  const quickLinks = [
+    { label: 'Home', view: 'home' },
+    { label: 'Collections', view: 'shop' },
+    { label: 'Prestige', view: 'prestige-shop' },
+    { label: 'Track Order', view: userInfo ? 'account' : 'track-order' },
+    { label: 'About', view: 'about' },
+    { label: 'Contact', view: 'contact' },
+  ];
 
   const handleNewsletterSubmit = (event) => {
     event.preventDefault();

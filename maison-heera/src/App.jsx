@@ -494,7 +494,7 @@ export default function App() {
               </AnimatePresence>
             </Suspense>
           </main>
-          <Footer onNavigate={navigateTo} notify={notify} />
+          <Footer onNavigate={navigateTo} notify={notify} userInfo={userInfo} />
         </div>
     </div>
   );
