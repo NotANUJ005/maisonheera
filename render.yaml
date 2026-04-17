@@ -3,6 +3,7 @@ services:
   - type: web
     name: maison-heera-server
     env: node
+    plan: free
     rootDir: Server
     buildCommand: npm install
     startCommand: npm start
