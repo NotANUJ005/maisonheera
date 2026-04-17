@@ -36,7 +36,7 @@ export const Contact = ({ notify }) => {
       exit={{ opacity: 0, y: -10 }}
       className="pt-24 pb-20 px-4 md:px-12 max-w-6xl mx-auto min-h-screen"
     >
-      <div className="relative w-full h-[40vh] md:h-[50vh] flex items-center justify-center overflow-hidden mb-16 rounded-[2rem] shadow-xl text-center">
+      <div className="relative w-full h-[40vh] md:h-[50vh] flex items-center justify-center overflow-hidden mb-16 rounded-[2rem] shadow-xl text-center bg-stone-900">
         <div className="absolute inset-0 bg-stone-900/50 z-10 transition-opacity duration-700 hover:bg-stone-900/40" />
         <img 
           src="https://images.unsplash.com/photo-1543003588-4660d5bfa1ec?q=80&w=2000&auto=format&fit=crop" 

@@ -10,7 +10,7 @@ export const About = () => {
   return (
     <motion.div initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }} className="pt-24 pb-20 px-4 md:px-12 max-w-6xl mx-auto min-h-screen">
       <ScrollReveal>
-        <div className="relative w-full h-[50vh] md:h-[70vh] flex items-center justify-center overflow-hidden mb-20 rounded-[2rem] shadow-xl">
+        <div className="relative w-full h-[50vh] md:h-[70vh] flex items-center justify-center overflow-hidden mb-20 rounded-[2rem] shadow-xl bg-stone-900">
           <div className="absolute inset-0 bg-stone-900/40 z-10 transition-opacity duration-700 hover:bg-stone-900/30" />
           <img 
             src="https://images.unsplash.com/photo-1535632787350-4e68eefc5fac?q=80&w=2000&auto=format&fit=crop" 

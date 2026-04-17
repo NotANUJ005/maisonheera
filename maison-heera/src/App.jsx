@@ -1,7 +1,6 @@
 import React, { Suspense, useEffect, useMemo, useRef, useState } from 'react';
 import { AnimatePresence, motion } from 'framer-motion';
 import { Route, Routes, useLocation, useNavigate } from 'react-router-dom';
-import { PreLoader } from './components/ui/PreLoader';
 import { Navbar } from './components/layout/Navbar';
 import { Footer } from './components/layout/Footer';
 import { CartDrawer } from './components/layout/CartDrawer';
@@ -27,7 +26,6 @@ const ACCOUNT_TAB_STORAGE_KEY = 'maison-heera.account-tab';
 export default function App() {
   const location = useLocation();
   const navigate = useNavigate();
-  const [isLoading, setIsLoading] = useState(true);
   const route = useMemo(() => parseRoute(location.pathname + location.search), [location.pathname, location.search]);
   
   const {
@@ -292,39 +290,35 @@ export default function App() {
   }, [activeCategoryFilter, activeMaterialFilter, isSearchActive]);
 
   return (
-    <div className="min-h-screen bg-[#FAF9F6] text-stone-900 font-sans selection:bg-stone-200 overflow-x-hidden">
-      <AnimatePresence>
-        {isLoading && <PreLoader key="loader" setLoading={setIsLoading} />}
-      </AnimatePresence>
 
-      <ToastRegion toasts={toasts} onDismiss={dismissToast} />
+      <div className="min-h-screen bg-[#FAF9F6] text-stone-900 font-sans selection:bg-stone-200 overflow-x-hidden">
+        <ToastRegion toasts={toasts} onDismiss={dismissToast} />
 
-      <CartDrawer
-        isOpen={isCartOpen}
-        onClose={() => setIsCartOpen(false)}
-        cartItems={cartItems}
-        removeFromCart={removeFromCart}
-        updateQuantity={updateQuantity}
-        clearCart={() => setCartItems([])}
-        onCheckout={() => {
-          setIsCartOpen(false);
-          navigateTo({ view: 'checkout' });
-        }}
-        notify={notify}
-      />
+        <CartDrawer
+          isOpen={isCartOpen}
+          onClose={() => setIsCartOpen(false)}
+          cartItems={cartItems}
+          removeFromCart={removeFromCart}
+          updateQuantity={updateQuantity}
+          clearCart={() => setCartItems([])}
+          onCheckout={() => {
+            setIsCartOpen(false);
+            navigateTo({ view: 'checkout' });
+          }}
+          notify={notify}
+        />
 
-      <AccountDrawer
-        isOpen={isAccountOpen}
-        onClose={() => setIsAccountOpen(false)}
-        userInfo={userInfo}
-        setUserInfo={setUserInfo}
-        onNavigate={navigateTo}
-        setActiveAccountTab={setActiveAccountTab}
-        notify={notify}
-      />
+        <AccountDrawer
+          isOpen={isAccountOpen}
+          onClose={() => setIsAccountOpen(false)}
+          userInfo={userInfo}
+          setUserInfo={setUserInfo}
+          onNavigate={navigateTo}
+          setActiveAccountTab={setActiveAccountTab}
+          notify={notify}
+        />
 
-      {!isLoading && (
-        <motion.div initial={{ opacity: 0 }} animate={{ opacity: 1 }} transition={{ duration: 0.8 }}>
+        <div>
           <Navbar
             currentView={currentView}
             onNavigate={navigateTo}
@@ -338,7 +332,7 @@ export default function App() {
             userInfo={userInfo}
           />
           <main className="pt-0 min-h-screen">
-            <Suspense fallback={<PreLoader setLoading={() => {}} />}>
+            <Suspense fallback={<div />}>
               <AnimatePresence mode="wait">
                 <Routes location={location} key={location.pathname}>
                   <Route
@@ -501,8 +495,7 @@ export default function App() {
             </Suspense>
           </main>
           <Footer onNavigate={navigateTo} notify={notify} />
-        </motion.div>
-      )}
+        </div>
     </div>
   );
 }
