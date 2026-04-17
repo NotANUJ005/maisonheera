@@ -1,7 +1,8 @@
 import { LUXURY_PRODUCTS, normalizeProduct } from '../data/products';
 
-export const API_BASE_URL =
-  (import.meta.env.VITE_API_BASE_URL || 'http://localhost:5000').replace(/\/$/, '');
+export const API_BASE_URL = import.meta.env.DEV
+  ? 'http://localhost:5000'
+  : 'https://maison-heera-server.onrender.com';
 const LOCAL_DEMO_MODE_ENABLED =
   String(import.meta.env.VITE_ENABLE_LOCAL_FALLBACK ?? (import.meta.env.DEV ? 'true' : 'false')).toLowerCase() === 'true';
 
