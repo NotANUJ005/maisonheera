@@ -1,10 +1,68 @@
+import fs from 'fs';
+import path from 'path';
 import express from 'express';
+import multer from 'multer';
+import { fileURLToPath } from 'url';
 import Product from '../models/Product.js';
 import Order from '../models/Order.js';
 import { isLocalImagePath, persistRemoteImage } from '../utils/imageStorage.js';
 import { protect, admin } from '../middleware/authMiddleware.js';
 
 const router = express.Router();
+const __filename = fileURLToPath(import.meta.url);
+const __dirname = path.dirname(__filename);
+const productUploadsDir = path.resolve(__dirname, '..', 'uploads', 'products');
+
+fs.mkdirSync(productUploadsDir, { recursive: true });
+
+const slugify = (value) =>
+  String(value || 'product')
+    .trim()
+    .toLowerCase()
+    .replace(/[^a-z0-9]+/g, '-')
+    .replace(/(^-|-$)/g, '');
+
+const imageUpload = multer({
+  storage: multer.diskStorage({
+    destination: (_req, _file, callback) => {
+      callback(null, productUploadsDir);
+    },
+    filename: (req, file, callback) => {
+      const extension = path.extname(file.originalname) || '.jpg';
+      const productName = req.body?.name || 'product';
+      callback(null, `${slugify(productName)}-${Date.now()}${extension.toLowerCase()}`);
+    },
+  }),
+  fileFilter: (_req, file, callback) => {
+    if (file.mimetype?.startsWith('image/')) {
+      callback(null, true);
+      return;
+    }
+
+    callback(new Error('Only image files can be uploaded.'));
+  },
+  limits: {
+    fileSize: 8 * 1024 * 1024,
+  },
+});
+
+const handleProductUpload = (req, res, next) => {
+  imageUpload.single('imageFile')(req, res, (error) => {
+    if (!error) {
+      next();
+      return;
+    }
+
+    res.status(400).json({
+      message: error.message || 'Product image upload failed.',
+    });
+  });
+};
+
+const parseBoolean = (value) => {
+  if (typeof value === 'boolean') return value;
+  return ['true', '1', 'on', 'yes'].includes(String(value || '').trim().toLowerCase());
+};
 
 const findFallbackImage = async (product, resolvedType) => {
   const matchers = [
@@ -69,6 +127,15 @@ const prepareProductPayload = async (product) => {
   };
 };
 
+const buildIncomingProductPayload = (body = {}, file = null) => ({
+  ...body,
+  price: Number(body.price),
+  stockQuantity: Number(body.stockQuantity),
+  featured: parseBoolean(body.featured),
+  image: file ? `/uploads/products/${file.filename}` : body.image,
+  imageOriginalUrl: file ? `/uploads/products/${file.filename}` : body.imageOriginalUrl,
+});
+
 router.get('/', async (req, res) => {
   try {
     const products = await Product.find({}).lean();
@@ -79,9 +146,9 @@ router.get('/', async (req, res) => {
   }
 });
 
-router.post('/', protect, admin, async (req, res) => {
+router.post('/', protect, admin, handleProductUpload, async (req, res) => {
   try {
-    const preparedProduct = await prepareProductPayload(req.body);
+    const preparedProduct = await prepareProductPayload(buildIncomingProductPayload(req.body, req.file));
     const newProduct = new Product(preparedProduct);
     const savedProduct = await newProduct.save();
     res.status(201).json(savedProduct);

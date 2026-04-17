@@ -280,10 +280,14 @@ export const shouldUseLocalFallback = (status, error) =>
 
 export const jsonRequest = async (path, options = {}) => {
   const currentUser = getStoredUser();
+  const isFormDataBody = typeof FormData !== 'undefined' && options.body instanceof FormData;
   const headers = {
-    'Content-Type': 'application/json',
     ...(options.headers || {}),
   };
+
+  if (!isFormDataBody && !headers['Content-Type']) {
+    headers['Content-Type'] = 'application/json';
+  }
 
   if (options.includeAuth !== false && currentUser?.token && !headers.Authorization) {
     headers.Authorization = `Bearer ${currentUser.token}`;

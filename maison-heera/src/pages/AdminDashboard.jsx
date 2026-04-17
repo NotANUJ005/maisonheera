@@ -48,6 +48,19 @@ const buildRangeKey = (selection) => {
   return `${normalized.amount}-${normalized.unit}`;
 };
 
+const readFileAsDataUrl = (file) =>
+  new Promise((resolve, reject) => {
+    if (!file) {
+      resolve('');
+      return;
+    }
+
+    const reader = new FileReader();
+    reader.onload = () => resolve(String(reader.result || ''));
+    reader.onerror = () => reject(new Error('Could not read the selected image file.'));
+    reader.readAsDataURL(file);
+  });
+
 const getAnalyticsPeriodLabel = (analytics) => analytics?.period?.label || 'selected period';
 const DEFAULT_FILTERS = { category: 'all', material: 'all' };
 const DEFAULT_WIDGET_FILTERS = {
@@ -644,6 +657,23 @@ export const AdminDashboard = ({ setCurrentView, userInfo }) => {
     type: 'product',
     featured: false,
   });
+  const [selectedImageFile, setSelectedImageFile] = useState(null);
+  const [imagePreviewUrl, setImagePreviewUrl] = useState('');
+  const [imageInputKey, setImageInputKey] = useState(0);
+
+  useEffect(() => {
+    if (!selectedImageFile) {
+      setImagePreviewUrl('');
+      return undefined;
+    }
+
+    const previewUrl = URL.createObjectURL(selectedImageFile);
+    setImagePreviewUrl(previewUrl);
+
+    return () => {
+      URL.revokeObjectURL(previewUrl);
+    };
+  }, [selectedImageFile]);
 
   const analyticsRequests = useMemo(() => {
     const seen = new Set();
@@ -957,6 +987,11 @@ export const AdminDashboard = ({ setCurrentView, userInfo }) => {
     }));
   };
 
+  const handleImageFileChange = (event) => {
+    const nextFile = event.target.files?.[0] || null;
+    setSelectedImageFile(nextFile);
+  };
+
   const resetForm = () => {
     setFormData({
       name: '',
@@ -969,12 +1004,24 @@ export const AdminDashboard = ({ setCurrentView, userInfo }) => {
       type: 'product',
       featured: false,
     });
+    setSelectedImageFile(null);
+    setImagePreviewUrl('');
+    setImageInputKey((prev) => prev + 1);
   };
 
   const handleSingleSubmit = async (event) => {
     event.preventDefault();
     setIsLoading(true);
     setStatusMessage({ type: '', text: '' });
+
+    if (!selectedImageFile && !String(formData.image || '').trim()) {
+      setStatusMessage({
+        type: 'error',
+        text: 'Upload a product image from your device, or provide an image URL if you need a fallback.',
+      });
+      setIsLoading(false);
+      return;
+    }
 
     const payload = {
       ...formData,
@@ -983,9 +1030,20 @@ export const AdminDashboard = ({ setCurrentView, userInfo }) => {
     };
 
     try {
+      const requestBody = selectedImageFile
+        ? (() => {
+            const multipartPayload = new FormData();
+            Object.entries(payload).forEach(([key, value]) => {
+              multipartPayload.append(key, String(value ?? ''));
+            });
+            multipartPayload.append('imageFile', selectedImageFile);
+            return multipartPayload;
+          })()
+        : JSON.stringify(payload);
+
       const response = await jsonRequest('/api/products', {
         method: 'POST',
-        body: JSON.stringify(payload),
+        body: requestBody,
       });
 
       if (!response.ok) {
@@ -1006,7 +1064,12 @@ export const AdminDashboard = ({ setCurrentView, userInfo }) => {
       resetForm();
       refreshVisibleAnalytics();
     } catch {
-      saveLocalProduct(payload);
+      const localPayload = {
+        ...payload,
+        image: selectedImageFile ? await readFileAsDataUrl(selectedImageFile) : payload.image,
+      };
+
+      saveLocalProduct(localPayload);
       setStatusMessage({
         type: 'success',
         text: 'Product saved locally. It is now visible in the storefront demo.',
@@ -1530,9 +1593,8 @@ export const AdminDashboard = ({ setCurrentView, userInfo }) => {
         <motion.div initial={{ opacity: 0, y: 10 }} animate={{ opacity: 1, y: 0 }} className="mt-10 bg-white p-8 shadow-sm border border-stone-100">
           <h2 className="text-2xl font-serif mb-8 text-stone-900">Add New Product</h2>
           <p className="mb-8 max-w-2xl text-sm text-stone-500">
-            Use a public image URL for each item. The backend will download the image, save it under
-            the server uploads folder, store the local media path in MongoDB, and include the starting stock
-            quantity for analytics.
+            Upload a product image directly from the admin device. The backend will save the file under
+            the server uploads folder, store the local media path in MongoDB, and use that same image in the storefront.
           </p>
           <form onSubmit={handleSingleSubmit} className="grid grid-cols-1 md:grid-cols-2 gap-8">
             {[
@@ -1541,7 +1603,6 @@ export const AdminDashboard = ({ setCurrentView, userInfo }) => {
               { label: 'Stock Quantity', name: 'stockQuantity', type: 'number', step: '1' },
               { label: 'Category', name: 'category', type: 'text' },
               { label: 'Material', name: 'material', type: 'text', wide: true },
-              { label: 'Public Image URL', name: 'image', type: 'text', wide: true },
             ].map((field) => (
               <div key={field.name} className={`relative ${field.wide ? 'md:col-span-2' : ''}`}>
                 <input
@@ -1559,6 +1620,72 @@ export const AdminDashboard = ({ setCurrentView, userInfo }) => {
                 </label>
               </div>
             ))}
+
+            <div className="md:col-span-2 grid gap-6 lg:grid-cols-[minmax(0,1fr)_18rem]">
+              <div className="rounded-[1.5rem] border border-stone-200 bg-stone-50 p-5">
+                <p className="text-sm font-medium uppercase tracking-[0.2em] text-stone-500">Product Image</p>
+                <p className="mt-3 text-sm text-stone-500">
+                  Choose an image from this device. The uploaded file will be used in the product card and product page.
+                </p>
+                <label
+                  htmlFor="product-image-upload"
+                  className="mt-5 inline-flex cursor-pointer items-center justify-center rounded-full border border-stone-900 px-6 py-3 text-sm uppercase tracking-[0.24em] text-stone-900 transition-colors hover:bg-stone-900 hover:text-white"
+                >
+                  {selectedImageFile ? 'Change Image' : 'Upload From Device'}
+                </label>
+                <input
+                  key={imageInputKey}
+                  id="product-image-upload"
+                  type="file"
+                  accept="image/*"
+                  onChange={handleImageFileChange}
+                  className="hidden"
+                />
+                <p className="mt-4 text-sm text-stone-600">
+                  {selectedImageFile ? selectedImageFile.name : 'No image selected yet.'}
+                </p>
+                {selectedImageFile && (
+                  <button
+                    type="button"
+                    onClick={() => {
+                      setSelectedImageFile(null);
+                      setImageInputKey((prev) => prev + 1);
+                    }}
+                    className="mt-3 text-xs uppercase tracking-[0.22em] text-stone-500 transition-colors hover:text-stone-900"
+                  >
+                    Remove Selected Image
+                  </button>
+                )}
+                <div className="relative mt-6">
+                  <input
+                    type="text"
+                    name="image"
+                    value={formData.image}
+                    onChange={handleInputChange}
+                    placeholder=" "
+                    className="w-full bg-transparent border-b border-stone-300 py-2 focus:outline-none focus:border-stone-900 transition-colors peer rounded-none text-stone-900"
+                  />
+                  <label className="absolute left-0 top-2 text-stone-400 text-sm uppercase tracking-widest pointer-events-none transition-all peer-focus:-top-4 peer-focus:text-[10px] peer-valid:-top-4 peer-valid:text-[10px] peer-focus:text-stone-900">
+                    Optional Image URL Fallback
+                  </label>
+                </div>
+              </div>
+
+              <div className="rounded-[1.5rem] border border-stone-200 bg-white p-4">
+                <p className="text-sm font-medium uppercase tracking-[0.2em] text-stone-500">Preview</p>
+                <div className="mt-4 aspect-[4/5] overflow-hidden rounded-[1.25rem] bg-stone-100">
+                  {imagePreviewUrl ? (
+                    <img src={imagePreviewUrl} alt="Selected product preview" className="h-full w-full object-cover" />
+                  ) : formData.image ? (
+                    <img src={formData.image} alt="Image URL preview" className="h-full w-full object-cover" />
+                  ) : (
+                    <div className="flex h-full items-center justify-center px-6 text-center text-sm text-stone-400">
+                      Product image preview will appear here.
+                    </div>
+                  )}
+                </div>
+              </div>
+            </div>
             
             <div className="relative md:col-span-2">
               <textarea
