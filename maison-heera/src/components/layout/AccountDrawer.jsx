@@ -21,6 +21,8 @@ const initialFormData = {
   confirmPassword: '',
 };
 
+const normalizeOtpCode = (value) => String(value || '').replace(/\D/g, '').slice(0, 6);
+
 export const AccountDrawer = ({
   isOpen,
   onClose,
@@ -60,7 +62,14 @@ export const AccountDrawer = ({
 
   const handleInputChange = (event) => {
     const { name, value } = event.target;
-    setFormData((prev) => ({ ...prev, [name]: value }));
+    const normalizedValue =
+      name === 'otp' || name === 'otpEmail' || name === 'otpSms'
+        ? normalizeOtpCode(value)
+        : name === 'mobileNumber'
+          ? String(value || '').replace(/\D/g, '').slice(0, 15)
+          : value;
+
+    setFormData((prev) => ({ ...prev, [name]: normalizedValue }));
     resetMessages();
   };
 
@@ -141,7 +150,11 @@ export const AccountDrawer = ({
       throw new Error('OTP flow is not active.');
     }
 
-    if (!formData.otp.trim()) {
+    const normalizedOtp = normalizeOtpCode(
+      otpContext.purpose === 'register' ? formData.otpEmail : formData.otp,
+    );
+
+    if (!normalizedOtp) {
       throw new Error('Enter the OTP sent to your email.');
     }
 
@@ -160,7 +173,7 @@ export const AccountDrawer = ({
         const user = await verifyAuthOtp({
           purpose: 'login',
           email: otpContext.email,
-          otp: formData.otp.trim(),
+          otp: normalizedOtp,
         });
 
         handleSuccessfulAuth(user);
@@ -168,32 +181,20 @@ export const AccountDrawer = ({
       }
 
       if (otpContext.purpose === 'register') {
-        if (!formData.otpEmail.trim()) {
-           throw new Error('Please enter the Email OTP.');
-        }
-
-        const fetchResult = await fetch('/api/users/register/verify-otp', {
-           method: 'POST',
-           headers: { 'Content-Type': 'application/json' },
-           body: JSON.stringify({
-             email: otpContext.email,
-             otpEmail: formData.otpEmail.trim()
-           })
+        const user = await verifyAuthOtp({
+          purpose: 'register',
+          email: otpContext.email,
+          otp: normalizedOtp,
         });
 
-        const userData = await fetchResult.json();
-        if (!fetchResult.ok) {
-           throw new Error(userData?.message || 'Verification failed');
-        }
-
-        handleSuccessfulAuth(userData);
+        handleSuccessfulAuth(user);
         return;
       }
 
       await verifyAuthOtp({
         purpose: 'forgot-password',
         email: otpContext.email,
-        otp: formData.otp.trim(),
+        otp: normalizedOtp,
         password: formData.newPassword,
       });
 

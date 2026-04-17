@@ -109,6 +109,7 @@ const createOtpChallenge = async ({ email, mobileNumber, otpMethod = 'email', pu
 };
 
 const isStrongPassword = (password) => STRONG_PASSWORD_REGEX.test(String(password || ''));
+const normalizeOtpCode = (value) => String(value || '').replace(/\D/g, '').slice(0, 6);
 
 const isEmailDomainValid = async (email) => {
   const domain = email.split('@')[1];
@@ -201,7 +202,9 @@ router.post('/login/verify-otp', async (req, res) => {
   const { email, otp } = req.body;
 
   try {
-    if (!email?.trim() || !otp?.trim()) {
+    const normalizedOtp = normalizeOtpCode(otp);
+
+    if (!email?.trim() || !normalizedOtp) {
       return res.status(400).json({ message: 'Email and OTP are required.' });
     }
 
@@ -217,7 +220,7 @@ router.post('/login/verify-otp', async (req, res) => {
       const verified = speakeasy.totp.verify({
         secret: user.twoFactorSecret,
         encoding: 'base32',
-        token: otp.trim(),
+        token: normalizedOtp,
         window: 1, // allow 1 window before/after to account for slight time drift
       });
 
@@ -229,7 +232,7 @@ router.post('/login/verify-otp', async (req, res) => {
       const payload = await consumeOtpChallenge({
         email,
         purpose: 'login',
-        code: otp.trim(),
+        code: normalizedOtp,
       });
 
       if (String(payload.userId) !== String(user._id)) {
@@ -305,18 +308,20 @@ router.post('/register/request-otp', async (req, res) => {
 });
 
 router.post('/register/verify-otp', async (req, res) => {
-  const { email, otpEmail } = req.body;
+  const { email, otpEmail, otp } = req.body;
 
   try {
     const normalizedEmail = email?.trim().toLowerCase();
-    if (!normalizedEmail || !otpEmail?.trim()) {
+    const normalizedOtp = normalizeOtpCode(otpEmail || otp);
+
+    if (!normalizedEmail || !normalizedOtp) {
       return res.status(400).json({ message: 'Email and OTP are required.' });
     }
 
     const payload = await consumeOtpChallenge({
       email: normalizedEmail,
       purpose: 'register_email',
-      code: otpEmail.trim(),
+      code: normalizedOtp,
     });
 
     const userExists = await User.findOne({ email: normalizedEmail });
@@ -375,7 +380,9 @@ router.post('/forgot-password/verify-otp', async (req, res) => {
 
   try {
     const normalizedEmail = email?.trim().toLowerCase();
-    if (!normalizedEmail || !otp?.trim() || !password) {
+    const normalizedOtp = normalizeOtpCode(otp);
+
+    if (!normalizedEmail || !normalizedOtp || !password) {
       return res.status(400).json({ message: 'Email, OTP, and password are required.' });
     }
     
@@ -386,7 +393,7 @@ router.post('/forgot-password/verify-otp', async (req, res) => {
     const payload = await consumeOtpChallenge({
       email: normalizedEmail,
       purpose: 'password_reset',
-      code: otp.trim(),
+      code: normalizedOtp,
     });
 
     const user = await User.findById(payload.userId);

@@ -426,6 +426,8 @@ const upsertLocalUserRecord = (user) => {
 const generateLocalOtpCode = () =>
   `${Math.floor(100000 + Math.random() * 900000)}`;
 
+const normalizeOtpCode = (value) => String(value || '').replace(/\D/g, '').slice(0, 6);
+
 const createLocalOtpChallenge = ({ email, purpose, payload = {} }) => {
   const normalizedEmail = email.trim().toLowerCase();
   const otp = generateLocalOtpCode();
@@ -451,12 +453,13 @@ const createLocalOtpChallenge = ({ email, purpose, payload = {} }) => {
 
 const consumeLocalOtpChallenge = ({ email, purpose, otp }) => {
   const normalizedEmail = email.trim().toLowerCase();
+  const normalizedOtp = normalizeOtpCode(otp);
   const otpEntries = getLocalAuthOtps();
   const match = otpEntries.find(
     (entry) =>
       entry.email === normalizedEmail &&
       entry.purpose === purpose &&
-      entry.otp === otp &&
+      entry.otp === normalizedOtp &&
       new Date(entry.expiresAt).getTime() > Date.now(),
   );
 
@@ -466,7 +469,7 @@ const consumeLocalOtpChallenge = ({ email, purpose, otp }) => {
 
   writeLocalAuthOtps(
     otpEntries.filter(
-      (entry) => !(entry.email === normalizedEmail && entry.purpose === purpose && entry.otp === otp),
+      (entry) => !(entry.email === normalizedEmail && entry.purpose === purpose && entry.otp === normalizedOtp),
     ),
   );
 
@@ -534,7 +537,7 @@ export const verifyLocalRegistrationOtp = ({ email, otp }) => {
   const payload = consumeLocalOtpChallenge({
     email: normalizedEmail,
     purpose: 'register',
-    otp: otp.trim(),
+    otp,
   });
 
   return registerLocalUser({
@@ -564,7 +567,7 @@ export const verifyLocalLoginOtp = ({ email, otp }) => {
   consumeLocalOtpChallenge({
     email: normalizedEmail,
     purpose: 'login',
-    otp: otp.trim(),
+    otp,
   });
 
   return loginLocalUser({
@@ -603,7 +606,7 @@ export const verifyLocalPasswordResetOtp = ({ email, otp, password }) => {
   const payload = consumeLocalOtpChallenge({
     email: normalizedEmail,
     purpose: 'password_reset',
-    otp: otp.trim(),
+    otp,
   });
 
   updateLocalUser(payload.userId, (user) => ({
@@ -936,7 +939,7 @@ export const requestAuthOtp = async ({ purpose, name = '', email, mobileNumber =
 
 export const verifyAuthOtp = async ({ purpose, email, otp, password = '' }) => {
   const normalizedEmail = String(email || '').trim().toLowerCase();
-  const normalizedOtp = String(otp || '').trim();
+  const normalizedOtp = normalizeOtpCode(otp);
 
   if (purpose === 'login') {
     const response = await jsonRequest('/api/users/login/verify-otp', {
@@ -972,6 +975,7 @@ export const verifyAuthOtp = async ({ purpose, email, otp, password = '' }) => {
       body: JSON.stringify({
         email: normalizedEmail,
         otp: normalizedOtp,
+        otpEmail: normalizedOtp,
       }),
     });
 
