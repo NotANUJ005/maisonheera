@@ -61,6 +61,9 @@ const userSchema = new mongoose.Schema(
     mobileNumber: {
       type: String,
     },
+    profilePicture: {
+      type: String,
+    },
     googleId: {
       type: String,
       sparse: true,

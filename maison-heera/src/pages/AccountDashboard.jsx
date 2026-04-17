@@ -57,6 +57,7 @@ export const AccountDashboard = ({
     name: userInfo?.name || '',
     email: userInfo?.email || '',
     mobileNumber: userInfo?.mobileNumber || '',
+    profilePicture: userInfo?.profilePicture || '',
     currentPassword: '',
     password: '',
   });
@@ -97,10 +98,11 @@ export const AccountDashboard = ({
       name: userInfo?.name || '',
       email: userInfo?.email || '',
       mobileNumber: userInfo?.mobileNumber || '',
+      profilePicture: userInfo?.profilePicture || '',
       currentPassword: '',
       password: '',
     });
-  }, [userInfo?.email, userInfo?.name]);
+  }, [userInfo?.email, userInfo?.name, userInfo?.mobileNumber, userInfo?.profilePicture]);
 
   useEffect(() => {
     setAddressForm((prev) => ({
@@ -243,6 +245,7 @@ export const AccountDashboard = ({
       name: profileForm.name,
       email: profileForm.email,
       mobileNumber: profileForm.mobileNumber,
+      profilePicture: profileForm.profilePicture,
       currentPassword: profileForm.currentPassword,
       password: profileForm.password,
     };
@@ -913,6 +916,17 @@ export const AccountDashboard = ({
                       name="mobileNumber"
                       value={profileForm.mobileNumber}
                       onChange={handleProfileChange}
+                      className="w-full rounded-2xl border border-stone-200 bg-stone-50 px-4 py-3 outline-none transition focus:border-stone-900"
+                    />
+                  </label>
+                  <label className="block text-sm text-stone-600">
+                    <span className="mb-2 block text-xs uppercase tracking-widest text-stone-500">Profile Picture URL</span>
+                    <input
+                      type="url"
+                      name="profilePicture"
+                      value={profileForm.profilePicture}
+                      onChange={handleProfileChange}
+                      placeholder="https://example.com/my-photo.jpg"
                       className="w-full rounded-2xl border border-stone-200 bg-stone-50 px-4 py-3 outline-none transition focus:border-stone-900"
                     />
                   </label>

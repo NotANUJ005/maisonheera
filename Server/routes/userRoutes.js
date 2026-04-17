@@ -40,6 +40,7 @@ const formatUserResponse = (user) => ({
   name: user.name,
   email: user.email,
   mobileNumber: user.mobileNumber || '',
+  profilePicture: user.profilePicture || '',
   isAdmin: user.isAdmin,
   addresses: user.addresses || [],
   cart: user.cart || [],
@@ -637,11 +638,12 @@ router.put('/profile', protect, async (req, res) => {
       return res.status(404).json({ message: 'User not found' });
     }
 
-    const { name, email, password, currentPassword, cart, wishlist, mobileNumber } = req.body;
+    const { name, email, password, currentPassword, cart, wishlist, mobileNumber, profilePicture } = req.body;
 
     if (cart) user.cart = cart;
     if (wishlist) user.wishlist = wishlist;
     if (mobileNumber !== undefined) user.mobileNumber = mobileNumber;
+    if (profilePicture !== undefined) user.profilePicture = profilePicture;
 
     if (email && email !== user.email) {
       const existingUser = await User.findOne({ email });

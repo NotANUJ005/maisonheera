@@ -388,6 +388,7 @@ const sanitizeUser = (user) => ({
   _id: user._id,
   name: user.name,
   email: user.email,
+  profilePicture: user.profilePicture || '',
   isAdmin: Boolean(user.isAdmin),
   addresses: ensureDefaultAddress(user.addresses || []),
   token: user.token || `local-session-${user._id}`,
@@ -683,6 +684,7 @@ export const updateLocalProfile = (userId, profile) =>
     ...user,
     name: profile.name?.trim() || user.name,
     email: profile.email?.trim().toLowerCase() || user.email,
+    profilePicture: profile.profilePicture !== undefined ? profile.profilePicture : user.profilePicture,
     password: profile.password ? profile.password : user.password,
     addresses: ensureDefaultAddress(user.addresses || []),
   }));
