@@ -70,6 +70,27 @@ export const AccountDashboard = ({
   const [qrCodeData, setQrCodeData] = useState(null);
   const [twoFactorToken, setTwoFactorToken] = useState('');
   const [twoFactorLoading, setTwoFactorLoading] = useState(false);
+  const [timeFilter, setTimeFilter] = useState('all');
+  const [showAllOrders, setShowAllOrders] = useState(false);
+
+  const filteredOrders = React.useMemo(() => {
+    if (timeFilter === 'all') return resolvedOrders;
+    const now = new Date();
+    if (timeFilter === '30days') {
+      const thirtyDaysAgo = new Date(now.setDate(now.getDate() - 30));
+      return resolvedOrders.filter(o => new Date(o.createdAt) >= thirtyDaysAgo);
+    }
+    if (timeFilter === '6months') {
+      const sixMonthsAgo = new Date(now.setMonth(now.getMonth() - 6));
+      return resolvedOrders.filter(o => new Date(o.createdAt) >= sixMonthsAgo);
+    }
+    if (!isNaN(timeFilter)) {
+      return resolvedOrders.filter(o => new Date(o.createdAt).getFullYear().toString() === timeFilter);
+    }
+    return resolvedOrders;
+  }, [resolvedOrders, timeFilter]);
+
+  const displayedOrders = showAllOrders ? filteredOrders : filteredOrders.slice(0, 3);
 
   useEffect(() => {
     setProfileForm({
@@ -428,7 +449,22 @@ export const AccountDashboard = ({
           <AnimatePresence mode="wait">
             {activeTab === 'orders' && (
               <motion.div key="orders" initial={{ opacity: 0, y: 10 }} animate={{ opacity: 1, y: 0 }} exit={{ opacity: 0, y: -10 }}>
-                <h2 className="text-2xl font-serif mb-6 border-b border-stone-200 pb-4">Order History</h2>
+                <div className="mb-6 border-b border-stone-200 pb-4 flex flex-col md:flex-row md:items-center justify-between gap-4">
+                  <h2 className="text-2xl font-serif text-stone-900">Order & Return History</h2>
+                  {resolvedOrders.length > 0 && (
+                    <select
+                      value={timeFilter}
+                      onChange={(e) => { setTimeFilter(e.target.value); setShowAllOrders(false); }}
+                      className="text-[10px] font-semibold tracking-widest uppercase border border-stone-200 bg-stone-50 rounded-full px-4 py-2 outline-none cursor-pointer hover:border-stone-400 transition-colors"
+                    >
+                      <option value="all">All Time</option>
+                      <option value="30days">Last 30 Days</option>
+                      <option value="6months">Last 6 Months</option>
+                      <option value={new Date().getFullYear().toString()}>{new Date().getFullYear()}</option>
+                      <option value={(new Date().getFullYear() - 1).toString()}>{new Date().getFullYear() - 1}</option>
+                    </select>
+                  )}
+                </div>
                 {pendingFeedbackCount > 0 && (
                   <div className="mb-6 rounded-[2rem] border border-amber-200 bg-amber-50 px-6 py-5 text-sm text-amber-900">
                     {pendingFeedbackCount === 1
@@ -436,9 +472,9 @@ export const AccountDashboard = ({
                       : `${pendingFeedbackCount} recently purchased pieces are waiting for your feedback.`}
                   </div>
                 )}
-                {resolvedOrders.length > 0 ? (
+                {displayedOrders.length > 0 ? (
                   <div className="space-y-6">
-                    {resolvedOrders.map((order) => (
+                    {displayedOrders.map((order) => (
                       <div key={order._id} className="border border-stone-200 p-6 flex flex-col gap-4 rounded-[2rem] bg-white shadow-sm">
                         <div className="flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between border-b border-stone-100 pb-4">
                           <div className="flex flex-col gap-2">
@@ -602,10 +638,20 @@ export const AccountDashboard = ({
                         </div>
                       </div>
                     ))}
+                    {filteredOrders.length > 3 && (
+                      <div className="pt-6 text-center">
+                        <Button
+                          variant="secondary"
+                          onClick={() => setShowAllOrders(prev => !prev)}
+                        >
+                          {showAllOrders ? 'Show Less' : `View All ${filteredOrders.length} Orders`}
+                        </Button>
+                      </div>
+                    )}
                   </div>
                 ) : (
                   <div className="py-12 text-center text-stone-500 bg-stone-50 border border-stone-100 rounded-[2rem]">
-                    <p>You have not placed any orders yet.</p>
+                    <p>No orders found for the selected time span.</p>
                   </div>
                 )}
               </motion.div>
