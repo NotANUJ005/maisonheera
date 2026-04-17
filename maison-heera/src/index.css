@@ -11,3 +11,9 @@
 body {
   background-color: var(--color-stone-50);
 }
+
+/* Hide native Edge browser password reveal icon */
+input::-ms-reveal,
+input::-ms-clear {
+  display: none;
+}

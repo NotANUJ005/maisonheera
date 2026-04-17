@@ -8,6 +8,7 @@ import { GoogleOAuthProvider } from '@react-oauth/google'
 
 const GOOGLE_CLIENT_ID = import.meta.env.VITE_GOOGLE_CLIENT_ID || '1234567890-test.apps.googleusercontent.com';
 
+console.log('Google Client ID Loaded:', import.meta.env.VITE_GOOGLE_CLIENT_ID ? 'Yes (from .env)' : 'No (using dummy 1234567890-test fallback)');
 
 createRoot(document.getElementById('root')).render(
   <StrictMode>
