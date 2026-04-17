@@ -1,12 +1,13 @@
 import React, { useMemo, useState } from 'react';
 import { motion } from 'framer-motion';
-import { Filter, ShoppingCart, Heart, Star, ArrowUpRight } from 'lucide-react';
+import { Filter, ShoppingCart, Heart, Star, ArrowUpRight, Search, SlidersHorizontal, ArrowDownWideNarrow, X } from 'lucide-react';
 import { ImageWithFallback } from '../components/ui/ImageWithFallback';
 import { ScrollReveal } from '../components/ui/ScrollReveal';
 
 export const Shop = ({
   addToCart,
   searchQuery,
+  setSearchQuery,
   onViewDetail,
   cartItems,
   wishlistItems,
@@ -19,10 +20,13 @@ export const Shop = ({
   title,
 }) => {
   const [sortBy, setSortBy] = useState('default');
+  const [isMobileFiltersOpen, setIsMobileFiltersOpen] = useState(false);
+  const [isMobileSortOpen, setIsMobileSortOpen] = useState(false);
 
   const categories = useMemo(() => ['All', ...new Set(itemsData.map((item) => item.category))], [itemsData]);
   const materials = useMemo(() => ['All', ...new Set(itemsData.map((item) => item.material))], [itemsData]);
   const hasActiveFilters = activeCategoryFilter !== 'All' || activeMaterialFilter !== 'All' || sortBy !== 'default';
+  const activeFilterCount = Number(activeCategoryFilter !== 'All') + Number(activeMaterialFilter !== 'All') + Number(sortBy !== 'default');
 
   const filteredProducts = useMemo(() => {
     const normalizedQueryTerms = searchQuery
@@ -85,7 +89,197 @@ export const Shop = ({
         </p>
       )}
 
-      <div className="flex flex-col md:flex-row justify-between items-start md:items-center mb-12 gap-6 pb-6 border-b border-stone-200 mt-8">
+      <div className="mb-6 grid gap-3 md:hidden">
+        <div className="flex items-center gap-3 rounded-[1.5rem] border border-stone-200 bg-white px-4 py-3 shadow-sm">
+          <Search size={16} className="text-stone-400" />
+          <input
+            type="text"
+            value={searchQuery}
+            onChange={(event) => setSearchQuery(event.target.value)}
+            placeholder="Search rings, pendants, platinum..."
+            className="w-full bg-transparent text-sm text-stone-900 outline-none placeholder:text-stone-400"
+          />
+          {searchQuery && (
+            <button
+              type="button"
+              aria-label="Clear search"
+              onClick={() => setSearchQuery('')}
+              className="flex h-6 w-6 items-center justify-center text-stone-400 transition hover:text-stone-900"
+            >
+              <X size={14} />
+            </button>
+          )}
+        </div>
+
+        <div className="flex items-center gap-3">
+          <button
+            type="button"
+            onClick={() => {
+              setIsMobileFiltersOpen((prev) => !prev);
+              setIsMobileSortOpen(false);
+            }}
+            className="flex flex-1 items-center justify-center gap-2 rounded-full border border-stone-200 bg-white px-4 py-3 text-[11px] uppercase tracking-[0.22em] text-stone-900 shadow-sm"
+          >
+            <SlidersHorizontal size={14} />
+            Filters
+            {activeFilterCount > 0 && (
+              <span className="rounded-full bg-stone-900 px-2 py-0.5 text-[10px] tracking-normal text-white">
+                {activeFilterCount}
+              </span>
+            )}
+          </button>
+          <button
+            type="button"
+            onClick={() => {
+              setIsMobileSortOpen((prev) => !prev);
+              setIsMobileFiltersOpen(false);
+            }}
+            className="flex flex-1 items-center justify-center gap-2 rounded-full border border-stone-200 bg-white px-4 py-3 text-[11px] uppercase tracking-[0.22em] text-stone-900 shadow-sm"
+          >
+            <ArrowDownWideNarrow size={14} />
+            Sort
+          </button>
+        </div>
+
+        {hasActiveFilters && (
+          <div className="flex flex-wrap gap-2">
+            {activeCategoryFilter !== 'All' && (
+              <button
+                type="button"
+                onClick={() => setActiveCategoryFilter('All')}
+                className="rounded-full bg-stone-100 px-3 py-2 text-[10px] uppercase tracking-[0.18em] text-stone-700"
+              >
+                {activeCategoryFilter} ×
+              </button>
+            )}
+            {activeMaterialFilter !== 'All' && (
+              <button
+                type="button"
+                onClick={() => setActiveMaterialFilter('All')}
+                className="rounded-full bg-stone-100 px-3 py-2 text-[10px] uppercase tracking-[0.18em] text-stone-700"
+              >
+                {activeMaterialFilter} ×
+              </button>
+            )}
+            {sortBy !== 'default' && (
+              <button
+                type="button"
+                onClick={() => setSortBy('default')}
+                className="rounded-full bg-stone-100 px-3 py-2 text-[10px] uppercase tracking-[0.18em] text-stone-700"
+              >
+                {sortBy === 'price-low' ? 'Price Low-High' : sortBy === 'price-high' ? 'Price High-Low' : 'Name'} ×
+              </button>
+            )}
+            <button
+              type="button"
+              onClick={() => {
+                setActiveCategoryFilter('All');
+                setActiveMaterialFilter('All');
+                setSortBy('default');
+              }}
+              className="rounded-full border border-stone-300 px-3 py-2 text-[10px] uppercase tracking-[0.18em] text-stone-900"
+            >
+              Clear All
+            </button>
+          </div>
+        )}
+
+        {isMobileFiltersOpen && (
+          <div className="rounded-[1.75rem] border border-stone-200 bg-white p-5 shadow-sm">
+            <div className="flex items-center justify-between">
+              <p className="text-sm font-medium uppercase tracking-[0.22em] text-stone-500">Filters</p>
+              <button
+                type="button"
+                onClick={() => setIsMobileFiltersOpen(false)}
+                className="text-xs uppercase tracking-[0.2em] text-stone-400"
+              >
+                Close
+              </button>
+            </div>
+
+            <div className="mt-5">
+              <p className="text-[10px] uppercase tracking-[0.22em] text-stone-400">Category</p>
+              <div className="mt-3 flex flex-wrap gap-2">
+                {categories.map((category) => (
+                  <button
+                    key={category}
+                    type="button"
+                    onClick={() => setActiveCategoryFilter(category)}
+                    className={`rounded-full px-4 py-2 text-[10px] uppercase tracking-[0.18em] transition-colors ${
+                      activeCategoryFilter === category
+                        ? 'bg-stone-900 text-white'
+                        : 'bg-stone-100 text-stone-700'
+                    }`}
+                  >
+                    {category === 'All' ? 'All Categories' : category}
+                  </button>
+                ))}
+              </div>
+            </div>
+
+            <div className="mt-6">
+              <p className="text-[10px] uppercase tracking-[0.22em] text-stone-400">Material</p>
+              <div className="mt-3 flex flex-wrap gap-2">
+                {materials.map((material) => (
+                  <button
+                    key={material}
+                    type="button"
+                    onClick={() => setActiveMaterialFilter(material)}
+                    className={`rounded-full px-4 py-2 text-[10px] uppercase tracking-[0.18em] transition-colors ${
+                      activeMaterialFilter === material
+                        ? 'bg-stone-900 text-white'
+                        : 'bg-stone-100 text-stone-700'
+                    }`}
+                  >
+                    {material === 'All' ? 'All Materials' : material}
+                  </button>
+                ))}
+              </div>
+            </div>
+          </div>
+        )}
+
+        {isMobileSortOpen && (
+          <div className="rounded-[1.75rem] border border-stone-200 bg-white p-5 shadow-sm">
+            <div className="flex items-center justify-between">
+              <p className="text-sm font-medium uppercase tracking-[0.22em] text-stone-500">Sort</p>
+              <button
+                type="button"
+                onClick={() => setIsMobileSortOpen(false)}
+                className="text-xs uppercase tracking-[0.2em] text-stone-400"
+              >
+                Close
+              </button>
+            </div>
+            <div className="mt-4 grid gap-2">
+              {[
+                { value: 'default', label: 'Featured' },
+                { value: 'price-low', label: 'Price: Low to High' },
+                { value: 'price-high', label: 'Price: High to Low' },
+                { value: 'name', label: 'Name' },
+              ].map((option) => (
+                <button
+                  key={option.value}
+                  type="button"
+                  onClick={() => {
+                    setSortBy(option.value);
+                    setIsMobileSortOpen(false);
+                  }}
+                  className={`rounded-[1.1rem] border px-4 py-3 text-left text-sm transition-colors ${
+                    sortBy === option.value
+                      ? 'border-stone-900 bg-stone-900 text-white'
+                      : 'border-stone-200 bg-stone-50 text-stone-700'
+                  }`}
+                >
+                  {option.label}
+                </button>
+              ))}
+            </div>
+          </div>
+        )}
+      </div>
+
+      <div className="hidden md:flex flex-col md:flex-row justify-between items-start md:items-center mb-12 gap-6 pb-6 border-b border-stone-200 mt-8">
         <div className="flex flex-wrap gap-4 items-center w-full md:w-auto">
           <span className="flex items-center gap-2 text-stone-500 uppercase text-xs tracking-widest font-semibold mr-2">
             <Filter size={14} /> Filters:

@@ -358,6 +358,7 @@ export default function App() {
                       <Shop
                         addToCart={addToCart}
                         searchQuery={searchQuery}
+                        setSearchQuery={setSearchQuery}
                         onViewDetail={(item) => openProductDetail(item, 'shop')}
                         cartItems={cartItems}
                         wishlistItems={wishlistItems}
@@ -377,6 +378,7 @@ export default function App() {
                       <Shop
                         addToCart={addToCart}
                         searchQuery={searchQuery}
+                        setSearchQuery={setSearchQuery}
                         onViewDetail={(item) => openProductDetail(item, 'prestige-shop')}
                         cartItems={cartItems}
                         wishlistItems={wishlistItems}

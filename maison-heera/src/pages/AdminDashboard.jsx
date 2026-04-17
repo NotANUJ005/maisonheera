@@ -12,6 +12,7 @@ import {
   loadAdminShipmentOrders,
   markAdminShipmentDelivered,
   refreshAdminShipment,
+  resolveMediaUrl,
   saveLocalProduct,
   shouldUseLocalFallback,
   CATALOG_UPDATED_EVENT,
@@ -634,6 +635,9 @@ const ProductComparisonChart = ({ title, rows, valueKey, valueFormatter, subtitl
 };
 
 export const AdminDashboard = ({ setCurrentView, userInfo }) => {
+  const allowLocalProductFallback =
+    import.meta.env.DEV ||
+    String(import.meta.env.VITE_ENABLE_LOCAL_FALLBACK ?? '').toLowerCase() === 'true';
   const [view, setView] = useState('analytics');
   const [analyticsView, setAnalyticsView] = useState('line');
   const [widgetFilters, setWidgetFilters] = useState(DEFAULT_WIDGET_FILTERS);
@@ -646,6 +650,7 @@ export const AdminDashboard = ({ setCurrentView, userInfo }) => {
   const [shipmentOrders, setShipmentOrders] = useState([]);
   const [shipmentLoading, setShipmentLoading] = useState(false);
   const [shipmentActionKey, setShipmentActionKey] = useState('');
+  const [lastCreatedProduct, setLastCreatedProduct] = useState(null);
   const [formData, setFormData] = useState({
     name: '',
     price: '',
@@ -1057,25 +1062,46 @@ export const AdminDashboard = ({ setCurrentView, userInfo }) => {
       setStatusMessage({
         type: 'success',
         text: response.data?.image
-          ? `Product created successfully. The image has been stored on the server at ${response.data.image}.`
-          : 'Product created successfully.',
+          ? `${payload.type === 'prestige' ? 'Prestige item' : 'Product'} created successfully. The image has been stored on the server at ${response.data.image}. It should now appear in ${payload.type === 'prestige' ? 'The Prestige Archives' : 'The Archive'} after the catalog refresh.`
+          : `${payload.type === 'prestige' ? 'Prestige item' : 'Product'} created successfully. It should now appear in ${payload.type === 'prestige' ? 'The Prestige Archives' : 'The Archive'}.`,
+      });
+      setLastCreatedProduct({
+        name: response.data?.name || payload.name,
+        type: response.data?.type || payload.type,
+        image: response.data?.image || payload.image,
+        imageUrl: resolveMediaUrl(response.data?.image || payload.image),
+        isLocalOnly: false,
       });
       window.dispatchEvent(new Event(CATALOG_UPDATED_EVENT));
       resetForm();
       refreshVisibleAnalytics();
-    } catch {
-      const localPayload = {
-        ...payload,
-        image: selectedImageFile ? await readFileAsDataUrl(selectedImageFile) : payload.image,
-      };
+    } catch (error) {
+      if (allowLocalProductFallback) {
+        const localPayload = {
+          ...payload,
+          image: selectedImageFile ? await readFileAsDataUrl(selectedImageFile) : payload.image,
+        };
 
-      saveLocalProduct(localPayload);
-      setStatusMessage({
-        type: 'success',
-        text: 'Product saved locally. It is now visible in the storefront demo.',
-      });
-      resetForm();
-      refreshVisibleAnalytics();
+        saveLocalProduct(localPayload);
+        setStatusMessage({
+          type: 'success',
+          text: `The backend request failed, so this ${payload.type === 'prestige' ? 'prestige item' : 'product'} was saved only in local demo mode. It will appear on this browser, but it was not published to the live database.`,
+        });
+        setLastCreatedProduct({
+          name: localPayload.name,
+          type: localPayload.type,
+          image: localPayload.image,
+          imageUrl: localPayload.image,
+          isLocalOnly: true,
+        });
+        resetForm();
+        refreshVisibleAnalytics();
+      } else {
+        setStatusMessage({
+          type: 'error',
+          text: error.message || 'The product upload did not reach the live backend, so nothing was published.',
+        });
+      }
     } finally {
       setIsLoading(false);
     }
@@ -1116,6 +1142,49 @@ export const AdminDashboard = ({ setCurrentView, userInfo }) => {
           }`}
         >
           {statusMessage.text}
+        </div>
+      )}
+
+      {view === 'single' && lastCreatedProduct && (
+        <div className="mt-6 rounded-[1.75rem] border border-stone-200 bg-stone-50 p-5">
+          <p className="text-[10px] uppercase tracking-[0.25em] text-stone-400">Last Uploaded Item</p>
+          <div className="mt-4 grid gap-5 lg:grid-cols-[9rem_minmax(0,1fr)]">
+            <div className="aspect-[4/5] overflow-hidden rounded-[1.25rem] bg-white">
+              {lastCreatedProduct.imageUrl ? (
+                <img
+                  src={lastCreatedProduct.imageUrl}
+                  alt={lastCreatedProduct.name}
+                  className="h-full w-full object-cover"
+                />
+              ) : (
+                <div className="flex h-full items-center justify-center px-4 text-center text-sm text-stone-400">
+                  No image preview available
+                </div>
+              )}
+            </div>
+            <div>
+              <h3 className="text-xl font-serif text-stone-900">{lastCreatedProduct.name}</h3>
+              <p className="mt-2 text-sm text-stone-600">
+                Section: {lastCreatedProduct.type === 'prestige' ? 'The Prestige Archives' : 'The Archive'}
+              </p>
+              <p className="mt-1 text-sm text-stone-600">
+                Storage: {lastCreatedProduct.isLocalOnly ? 'This browser only' : 'Live backend upload'}
+              </p>
+              <p className="mt-4 break-all text-sm text-stone-500">
+                Image path: {lastCreatedProduct.image || 'Not available'}
+              </p>
+              {lastCreatedProduct.imageUrl && (
+                <a
+                  href={lastCreatedProduct.imageUrl}
+                  target="_blank"
+                  rel="noreferrer"
+                  className="mt-4 inline-flex rounded-full border border-stone-900 px-5 py-2 text-sm uppercase tracking-[0.22em] text-stone-900 transition-colors hover:bg-stone-900 hover:text-white"
+                >
+                  Open Uploaded Image
+                </a>
+              )}
+            </div>
+          </div>
         </div>
       )}
 
@@ -1704,15 +1773,26 @@ export const AdminDashboard = ({ setCurrentView, userInfo }) => {
 
             <div className="flex flex-col gap-4 text-stone-900">
               <label className="text-sm uppercase tracking-widest text-stone-500">Product Type</label>
-              <select
-                name="type"
-                value={formData.type}
-                onChange={handleInputChange}
-                className="bg-transparent border-b border-stone-300 py-2 focus:outline-none focus:border-stone-900"
-              >
-                <option value="product">Standard Product</option>
-                <option value="prestige">Prestige Item</option>
-              </select>
+              <div className="grid grid-cols-2 gap-3">
+                {[
+                  { value: 'product', label: 'Standard Product', copy: 'Appears in The Archive' },
+                  { value: 'prestige', label: 'Prestige Item', copy: 'Appears in The Prestige Archives' },
+                ].map((option) => (
+                  <button
+                    key={option.value}
+                    type="button"
+                    onClick={() => setFormData((prev) => ({ ...prev, type: option.value }))}
+                    className={`rounded-[1.25rem] border px-4 py-4 text-left transition-colors ${
+                      formData.type === option.value
+                        ? 'border-stone-900 bg-stone-900 text-white'
+                        : 'border-stone-200 bg-white text-stone-700 hover:border-stone-300 hover:bg-stone-50'
+                    }`}
+                  >
+                    <span className="block text-sm font-medium">{option.label}</span>
+                    <span className="mt-2 block text-xs uppercase tracking-[0.18em] opacity-75">{option.copy}</span>
+                  </button>
+                ))}
+              </div>
             </div>
 
             <div className="flex items-center gap-4 text-stone-900 h-full mt-4">

@@ -25,6 +25,7 @@ export const Navbar = ({
   const [isScrolled, setIsScrolled] = useState(false);
   const [isSearchExpanded, setIsSearchExpanded] = useState(false);
   const [isMobileMenuOpen, setIsMobileMenuOpen] = useState(false);
+  const [isMobileSearchOpen, setIsMobileSearchOpen] = useState(false);
 
   const searchResults = (allItems || [])
     .filter((item) => 
@@ -44,6 +45,7 @@ export const Navbar = ({
   const handleNavigate = (view) => {
     onNavigate({ view });
     setIsMobileMenuOpen(false);
+    setIsMobileSearchOpen(false);
   };
 
   return (
@@ -100,6 +102,22 @@ export const Navbar = ({
         </nav>
 
         <div className={`flex gap-4 md:ml-6 md:border-l md:pl-6 items-center ${isLight ? 'md:border-white/30' : 'md:border-stone-300'}`}>
+          <button
+            type="button"
+            aria-label="Open search"
+            className={`shrink-0 md:hidden ${isLight ? 'text-white' : 'text-stone-900'}`}
+            onClick={() => {
+              setIsMobileSearchOpen((prev) => !prev);
+              setIsMobileMenuOpen(false);
+            }}
+          >
+            {isMobileSearchOpen ? (
+              <X size={18} strokeWidth={1.5} className="cursor-pointer hover:opacity-50 transition-opacity" />
+            ) : (
+              <Search size={18} strokeWidth={1.5} className="cursor-pointer hover:opacity-50 transition-opacity" />
+            )}
+          </button>
+
           <div className="relative hidden md:block">
             <div
               className={`flex items-center overflow-hidden rounded-full border transition-all duration-300 ${
@@ -247,6 +265,84 @@ export const Navbar = ({
       </div>
 
       <AnimatePresence>
+        {isMobileSearchOpen && (
+          <motion.div
+            initial={{ opacity: 0, y: -12 }}
+            animate={{ opacity: 1, y: 0 }}
+            exit={{ opacity: 0, y: -12 }}
+            className="mx-4 mt-4 rounded-[2rem] border border-stone-200 bg-white p-5 shadow-xl md:hidden"
+          >
+            <div className="flex items-center gap-3 rounded-[1.5rem] border border-stone-200 bg-stone-50 px-4 py-3">
+              <Search size={16} className="text-stone-400" />
+              <input
+                autoFocus
+                type="text"
+                value={searchQuery}
+                onChange={(event) => setSearchQuery(event.target.value)}
+                onKeyDown={(event) => {
+                  if (event.key === 'Enter' && searchQuery.trim()) {
+                    onNavigate({ view: 'shop' });
+                    setIsMobileSearchOpen(false);
+                  }
+                }}
+                placeholder="Search rings, necklaces, white gold..."
+                className="w-full bg-transparent text-sm text-stone-900 outline-none placeholder:text-stone-400"
+              />
+              {searchQuery && (
+                <button
+                  type="button"
+                  aria-label="Clear search"
+                  onClick={() => setSearchQuery('')}
+                  className="flex h-6 w-6 items-center justify-center text-stone-400 transition hover:text-stone-900"
+                >
+                  <X size={14} />
+                </button>
+              )}
+            </div>
+
+            <div className="mt-4 flex items-center justify-between">
+              <p className="text-[10px] uppercase tracking-[0.22em] text-stone-400">Quick Search</p>
+              <button
+                type="button"
+                onClick={() => {
+                  onNavigate({ view: 'shop' });
+                  setIsMobileSearchOpen(false);
+                }}
+                className="text-[10px] uppercase tracking-[0.22em] text-stone-900"
+              >
+                Open Catalog
+              </button>
+            </div>
+
+            {searchQuery.trim() && searchResults.length > 0 ? (
+              <div className="mt-4 overflow-hidden rounded-[1.5rem] border border-stone-100">
+                {searchResults.map((item) => (
+                  <button
+                    key={item.id}
+                    type="button"
+                    onClick={() => {
+                      onNavigate({ view: 'product-detail', productId: item.id, from: item.type === 'prestige' ? 'prestige-shop' : 'shop' });
+                      setIsMobileSearchOpen(false);
+                      setSearchQuery('');
+                    }}
+                    className="flex w-full items-center gap-3 border-b border-stone-100 bg-white px-4 py-3 text-left last:border-b-0"
+                  >
+                    <img src={item.image} alt={item.name} className="h-12 w-12 rounded-xl object-cover bg-stone-100" />
+                    <div className="min-w-0 flex-1">
+                      <p className="truncate font-serif text-base text-stone-900">{item.name}</p>
+                      <p className="mt-1 text-[10px] uppercase tracking-[0.18em] text-stone-400">{item.category}</p>
+                    </div>
+                  </button>
+                ))}
+              </div>
+            ) : (
+              <div className="mt-4 rounded-[1.5rem] bg-stone-50 px-4 py-4 text-sm text-stone-500">
+                Search by product name, category, or material to jump straight into the catalog.
+              </div>
+            )}
+          </motion.div>
+        )}
+
         {isMobileMenuOpen && (
           <motion.div
             initial={{ opacity: 0, y: -12 }}
@@ -274,20 +370,6 @@ export const Navbar = ({
                   Admin Dashboard
                 </button>
               )}
-            </div>
-
-            <div className="mt-5 rounded-[1.5rem] bg-stone-50 px-4 py-3">
-              <label className="block text-[10px] uppercase tracking-[0.25em] text-stone-400">Search</label>
-              <input
-                type="text"
-                value={searchQuery}
-                onChange={(event) => {
-                  setSearchQuery(event.target.value);
-                  if (event.target.value.trim()) onNavigate({ view: 'shop' });
-                }}
-                placeholder="Diamond ring, pendant, white gold..."
-                className="mt-2 w-full bg-transparent text-sm text-stone-900 outline-none"
-              />
             </div>
 
             <div className="mt-5 text-sm text-stone-500">
